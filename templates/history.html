@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}Monitoring History – NetFault{% endblock %}
+
+{% block content %}
+<div class="history-wrapper">
+    <!-- Header -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <div>
+            <h1 class="h3 fw-bold mb-1 text-white">Monitoring Audit History</h1>
+            <p class="text-secondary mb-0 fs-sm">
+                Chronological log of automated and manual network reachability probes and fault events.
+            </p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-danger btn-sm d-flex align-items-center gap-2" onclick="confirmClearHistory()">
+                <i class="fa-solid fa-trash-can"></i>
+                <span>Clear History Logs</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Card -->
+    <div class="card border-0 shadow-sm bg-card-dark mb-4">
+        <div class="card-body p-3">
+            <form method="GET" action="{{ url_for('history_page') }}" class="row g-2 align-items-center">
+                <!-- Device Filter -->
+                <div class="col-12 col-md-4">
+                    <label class="form-label fs-xs text-secondary mb-1">Filter by Device</label>
+                    <select name="device_id" class="form-select form-select-sm bg-dark text-white border-secondary" onchange="this.form.submit()">
+                        <option value="">All Devices</option>
+                        {% for dev in devices %}
+                            <option value="{{ dev.id }}" {% if selected_device == dev.id %}selected{% endif %}>
+                                {{ dev.device_name }} ({{ dev.ip_address }})
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Status Filter -->
+                <div class="col-12 col-md-4">
+                    <label class="form-label fs-xs text-secondary mb-1">Filter by Status</label>
+                    <select name="status" class="form-select form-select-sm bg-dark text-white border-secondary" onchange="this.form.submit()">
+                        <option value="">All Statuses (UP / DOWN / FAULT)</option>
+                        <option value="UP" {% if selected_status == 'UP' %}selected{% endif %}>UP (Healthy)</option>
+                        <option value="DOWN" {% if selected_status == 'DOWN' %}selected{% endif %}>DOWN (Unreachable)</option>
+                        <option value="FAULT" {% if selected_status == 'FAULT' %}selected{% endif %}>FAULT (Port Unavailable)</option>
+                    </select>
+                </div>
+
+                <!-- Reset Button -->
+                <div class="col-12 col-md-4 d-flex align-items-end gap-2 pt-md-3">
+                    <button type="submit" class="btn btn-cyan btn-sm px-3">
+                        <i class="fa-solid fa-filter me-1"></i> Apply Filters
+                    </button>
+                    {% if selected_device or selected_status %}
+                        <a href="{{ url_for('history_page') }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="fa-solid fa-rotate-left me-1"></i> Reset
+                        </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- History Table Card -->
+    <div class="card border-0 shadow-sm bg-card-dark">
+        <div class="card-header bg-transparent border-secondary-subtle py-3 d-flex justify-content-between align-items-center">
+            <h2 class="h5 fw-bold text-white mb-0">Logged Probe Records</h2>
+            <span class="badge bg-secondary-subtle text-secondary rounded-pill">{{ history|length }} Records</span>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle mb-0 custom-device-table">
+                    <thead class="table-dark-header">
+                        <tr>
+                            <th class="ps-3" style="width: 8%;">Log ID</th>
+                            <th style="width: 18%;">Device Name</th>
+                            <th style="width: 18%;">IP Address</th>
+                            <th style="width: 8%;">Port</th>
+                            <th style="width: 12%;">Status</th>
+                            <th style="width: 12%;">Response Time</th>
+                            <th style="width: 18%;">Fault Details</th>
+                            <th class="text-end pe-3" style="width: 16%;">Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if history %}
+                            {% for record in history %}
+                                <tr>
+                                    <td class="ps-3 text-secondary font-mono">#{{ record.id }}</td>
+                                    <td>
+                                        <span class="fw-semibold text-white">{{ record.device_name }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="font-mono text-cyan">{{ record.ip_address }}</span>
+                                    </td>
+                                    <td>
+                                        {% if record.tcp_port %}
+                                            <span class="badge bg-dark border border-secondary text-light font-mono">{{ record.tcp_port }}</span>
+                                        {% else %}
+                                            <span class="text-secondary">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if record.status == 'UP' %}
+                                            <span class="status-badge status-up">
+                                                <span class="status-dot"></span> UP
+                                            </span>
+                                        {% elif record.status == 'DOWN' %}
+                                            <span class="status-badge status-down">
+                                                <span class="status-dot"></span> DOWN
+                                            </span>
+                                        {% elif record.status == 'FAULT' %}
+                                            <span class="status-badge status-fault">
+                                                <span class="status-dot"></span> FAULT
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if record.response_time is not none %}
+                                            <span class="font-mono text-light">{{ record.response_time }} ms</span>
+                                        {% else %}
+                                            <span class="text-secondary">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if record.status == 'DOWN' %}
+                                            <span class="text-danger fw-semibold fs-xs">
+                                                <i class="fa-solid fa-circle-xmark me-1"></i> {{ record.fault_info or 'Device unreachable' }}
+                                            </span>
+                                        {% elif record.status == 'FAULT' %}
+                                            <span class="text-warning fw-semibold fs-xs">
+                                                <i class="fa-solid fa-triangle-exclamation me-1"></i> {{ record.fault_info or 'Port unavailable' }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-secondary fs-xs">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end pe-3 text-secondary fs-xs font-mono">
+                                        {{ record.checked_at }}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="8" class="text-center py-5 text-secondary">
+                                    <i class="fa-solid fa-clock-rotate-left fa-3x mb-3 text-secondary-subtle"></i>
+                                    <h5 class="text-white">No Monitoring Logs Found</h5>
+                                    <p class="fs-sm mb-0">No records match the selected filter criteria.</p>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Clear History Modal -->
+<div class="modal fade" id="clearHistoryModal" tabindex="-1" aria-labelledby="clearHistoryTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-card-dark text-white border border-secondary">
+            <div class="modal-header border-secondary-subtle">
+                <h5 class="modal-title text-danger d-flex align-items-center gap-2" id="clearHistoryTitle">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    Clear All Monitoring Logs
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete all historical probe records?</p>
+                <p class="text-secondary fs-xs mb-0">This will remove log history from SQLite permanently. Registered devices will remain untouched.</p>
+            </div>
+            <div class="modal-footer border-secondary-subtle">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="executeClearHistory()">
+                    <i class="fa-solid fa-trash me-1"></i> Clear Logs
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function confirmClearHistory() {
+    const modal = new bootstrap.Modal(document.getElementById('clearHistoryModal'));
+    modal.show();
+}
+
+function executeClearHistory() {
+    fetch('/api/history/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert('Failed to clear history: ' + data.error);
+        }
+    })
+    .catch(err => {
+        alert('Network error while clearing history: ' + err);
+    });
+}
+</script>
+{% endblock %}

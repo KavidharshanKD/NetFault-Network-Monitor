@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if is_edit %}Edit Device – NetFault{% else %}Add Device – NetFault{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-7">
+        
+        <!-- Breadcrumb / Back button -->
+        <div class="mb-3">
+            <a href="{{ url_for('devices_page') }}" class="text-secondary text-decoration-none fs-sm d-inline-flex align-items-center gap-1 hover-cyan">
+                <i class="fa-solid fa-arrow-left"></i>
+                <span>Back to Devices List</span>
+            </a>
+        </div>
+
+        <div class="card border-0 shadow bg-card-dark">
+            <div class="card-header bg-transparent border-secondary-subtle py-3">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="p-2 bg-primary-subtle text-primary rounded-3">
+                        <i class="fa-solid {% if is_edit %}fa-pen-to-square{% else %}fa-plus{% endif %}"></i>
+                    </div>
+                    <div>
+                        <h2 class="h5 fw-bold text-white mb-0">
+                            {% if is_edit %}Edit Network Device{% else %}Register New Network Device{% endif %}
+                        </h2>
+                        <div class="text-secondary fs-xs">
+                            {% if is_edit %}
+                                Update device configuration and monitoring parameters
+                            {% else %}
+                                Add an IP address or hostname to continuous ICMP/TCP monitoring
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-body p-4">
+                
+                <!-- Quick Demo Presets (for college presentation / testing) -->
+                {% if not is_edit %}
+                <div class="preset-box p-3 rounded-3 mb-4 bg-dark border border-secondary-subtle">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span class="fs-xs text-secondary-emphasis fw-bold text-uppercase letter-spacing-1">
+                            <i class="fa-solid fa-wand-magic-sparkles text-cyan me-1"></i> Quick Demo Test Presets
+                        </span>
+                        <span class="badge bg-secondary-subtle text-secondary fs-xs">1-Click Fill</span>
+                    </div>
+                    <p class="fs-xs text-secondary mb-2">
+                        Click any preset below to instantly fill the form and test a specific network status condition:
+                    </p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-xs btn-outline-success" onclick="fillPreset('Google Public DNS', '8.8.8.8', '', 'Reliable public DNS node (tests UP without port)')">
+                            <i class="fa-solid fa-circle-check me-1"></i> Preset: 8.8.8.8 (UP - Ping only)
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline-info" onclick="fillPreset('NetFault Web App', '127.0.0.1', '5000', 'Local Flask application web server (tests UP with port 5000)')">
+                            <i class="fa-solid fa-server me-1"></i> Preset: 127.0.0.1:5000 (UP - Service)
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline-warning" onclick="fillPreset('Simulated Fault Server', '127.0.0.1', '9999', 'Ping succeeds but port 9999 is closed (tests FAULT)')">
+                            <i class="fa-solid fa-triangle-exclamation me-1"></i> Preset: 127.0.0.1:9999 (FAULT)
+                        </button>
+                        <button type="button" class="btn btn-xs btn-outline-danger" onclick="fillPreset('Offline Blackhole Host', '192.0.2.1', '', 'Unreachable TEST-NET-1 IP address (tests DOWN)')">
+                            <i class="fa-solid fa-circle-xmark me-1"></i> Preset: 192.0.2.1 (DOWN)
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Device Form -->
+                <form method="POST" action="{% if is_edit %}{{ url_for('edit_device_page', device_id=device.id) }}{% else %}{{ url_for('add_device_page') }}{% endif %}" class="needs-validation" novalidate>
+                    
+                    <!-- Device Name -->
+                    <div class="mb-3">
+                        <label for="device_name" class="form-label text-white fw-semibold fs-sm">
+                            Device Name <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-dark border-secondary text-secondary">
+                                <i class="fa-solid fa-tag"></i>
+                            </span>
+                            <input 
+                                type="text" 
+                                class="form-control bg-dark text-white border-secondary" 
+                                id="device_name" 
+                                name="device_name" 
+                                placeholder="e.g., Core Router, Web Server, DB-Node" 
+                                value="{{ form.device_name or '' }}" 
+                                required
+                            >
+                        </div>
+                        <div class="form-text text-secondary fs-xs">A descriptive label identifying this network equipment or host.</div>
+                    </div>
+
+                    <!-- IP Address / Hostname -->
+                    <div class="mb-3">
+                        <label for="ip_address" class="form-label text-white fw-semibold fs-sm">
+                            IP Address / Hostname <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-dark border-secondary text-secondary">
+                                <i class="fa-solid fa-network-wired"></i>
+                            </span>
+                            <input 
+                                type="text" 
+                                class="form-control bg-dark text-white border-secondary font-mono" 
+                                id="ip_address" 
+                                name="ip_address" 
+                                placeholder="e.g., 192.168.1.1 or 8.8.8.8 or localhost" 
+                                value="{{ form.ip_address or '' }}" 
+                                required
+                            >
+                        </div>
+                        <div class="form-text text-secondary fs-xs">Valid IPv4, IPv6, or resolvable DNS hostname.</div>
+                    </div>
+
+                    <!-- TCP Port (Optional) -->
+                    <div class="mb-3">
+                        <label for="tcp_port" class="form-label text-white fw-semibold fs-sm">
+                            TCP Port <span class="text-secondary fw-normal">(Optional)</span>
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-dark border-secondary text-secondary">
+                                <i class="fa-solid fa-plug"></i>
+                            </span>
+                            <input 
+                                type="number" 
+                                class="form-control bg-dark text-white border-secondary font-mono" 
+                                id="tcp_port" 
+                                name="tcp_port" 
+                                placeholder="e.g., 80, 443, 22, 5000 (1 - 65535)" 
+                                min="1" 
+                                max="65535" 
+                                value="{{ form.tcp_port if form.tcp_port is not none else '' }}"
+                            >
+                        </div>
+                        <div class="form-text text-secondary fs-xs">
+                            Leave empty for pure ICMP Ping monitoring. If configured, system will probe this TCP socket service if Ping succeeds.
+                        </div>
+                    </div>
+
+                    <!-- Description (Optional) -->
+                    <div class="mb-4">
+                        <label for="description" class="form-label text-white fw-semibold fs-sm">
+                            Description <span class="text-secondary fw-normal">(Optional)</span>
+                        </label>
+                        <textarea 
+                            class="form-control bg-dark text-white border-secondary" 
+                            id="description" 
+                            name="description" 
+                            rows="2" 
+                            placeholder="e.g., Production web server running on port 5000"
+                        >{{ form.description or '' }}</textarea>
+                    </div>
+
+                    <!-- Submit Buttons -->
+                    <div class="d-flex align-items-center justify-content-end gap-2 pt-2 border-top border-secondary-subtle">
+                        <a href="{{ url_for('devices_page') }}" class="btn btn-secondary btn-sm px-3">Cancel</a>
+                        <button type="submit" class="btn btn-cyan btn-sm px-4 fw-semibold d-flex align-items-center gap-2">
+                            <i class="fa-solid {% if is_edit %}fa-floppy-disk{% else %}fa-plus{% endif %}"></i>
+                            <span>{% if is_edit %}Save Changes{% else %}Add Device & Probe{% endif %}</span>
+                        </button>
+                    </div>
+                </form>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function fillPreset(name, ip, port, desc) {
+    document.getElementById('device_name').value = name;
+    document.getElementById('ip_address').value = ip;
+    document.getElementById('tcp_port').value = port;
+    document.getElementById('description').value = desc;
+}
+</script>
+{% endblock %}

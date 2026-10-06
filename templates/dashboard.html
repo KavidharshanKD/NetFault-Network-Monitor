@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard – NetFault Network Monitor{% endblock %}
+
+{% block content %}
+<div class="dashboard-wrapper">
+    <!-- Header Title & Action Bar -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <div>
+            <h1 class="h3 fw-bold mb-1 text-white">Network Status Dashboard</h1>
+            <p class="text-secondary mb-0 fs-sm">
+                Centralized real-time monitoring and automated fault detection for network nodes.
+            </p>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <button class="btn btn-primary d-flex align-items-center gap-2 shadow-sm" onclick="triggerCheckAll(this)">
+                <i class="fa-solid fa-arrows-rotate"></i>
+                <span>Check All Devices</span>
+            </button>
+            <a href="{{ url_for('add_device_page') }}" class="btn btn-outline-cyan d-flex align-items-center gap-2">
+                <i class="fa-solid fa-plus"></i>
+                <span>Add Device</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Metrics Cards -->
+    <div class="row g-3 mb-4">
+        <!-- Card 1: Total Devices -->
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="card metric-card border-0 shadow-sm bg-card-dark">
+                <div class="card-body p-3 d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-secondary text-uppercase fw-semibold fs-xs letter-spacing-1">Total Devices</div>
+                        <div class="metric-number text-white fw-bold fs-2 mt-1" id="stat-total">{{ stats.total_devices }}</div>
+                        <div class="fs-xs text-secondary mt-1">Configured in system</div>
+                    </div>
+                    <div class="metric-icon-box bg-primary-subtle text-primary rounded-3">
+                        <i class="fa-solid fa-network-wired fa-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: UP Devices -->
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="card metric-card border-0 shadow-sm bg-card-dark border-start-status border-up">
+                <div class="card-body p-3 d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-success text-uppercase fw-semibold fs-xs letter-spacing-1">UP (Healthy)</div>
+                        <div class="metric-number text-success fw-bold fs-2 mt-1" id="stat-up">{{ stats.up_devices }}</div>
+                        <div class="fs-xs text-secondary mt-1">Ping & service operational</div>
+                    </div>
+                    <div class="metric-icon-box bg-success-subtle text-success rounded-3">
+                        <i class="fa-solid fa-circle-check fa-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 3: DOWN Devices -->
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="card metric-card border-0 shadow-sm bg-card-dark border-start-status border-down">
+                <div class="card-body p-3 d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-danger text-uppercase fw-semibold fs-xs letter-spacing-1">DOWN (Unreachable)</div>
+                        <div class="metric-number text-danger fw-bold fs-2 mt-1" id="stat-down">{{ stats.down_devices }}</div>
+                        <div class="fs-xs text-secondary mt-1">ICMP Ping failed</div>
+                    </div>
+                    <div class="metric-icon-box bg-danger-subtle text-danger rounded-3">
+                        <i class="fa-solid fa-circle-xmark fa-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 4: FAULT Devices -->
+        <div class="col-12 col-sm-6 col-xl-3">
+            <div class="card metric-card border-0 shadow-sm bg-card-dark border-start-status border-fault">
+                <div class="card-body p-3 d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="text-warning text-uppercase fw-semibold fs-xs letter-spacing-1">FAULT (Service Down)</div>
+                        <div class="metric-number text-warning fw-bold fs-2 mt-1" id="stat-fault">{{ stats.fault_devices }}</div>
+                        <div class="fs-xs text-secondary mt-1">Ping UP, Port unavailable</div>
+                    </div>
+                    <div class="metric-icon-box bg-warning-subtle text-warning rounded-3">
+                        <i class="fa-solid fa-triangle-exclamation fa-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Monitored Devices Table Card -->
+    <div class="card border-0 shadow-sm bg-card-dark">
+        <div class="card-header bg-transparent border-secondary-subtle py-3 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3">
+            <div class="d-flex align-items-center gap-2">
+                <h2 class="h5 fw-bold text-white mb-0">Monitored Network Devices</h2>
+                <span class="badge bg-secondary-subtle text-secondary rounded-pill" id="table-device-count">{{ devices|length }} Devices</span>
+            </div>
+
+            <!-- Filters and Search -->
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <!-- Status Filter Pills -->
+                <div class="btn-group btn-group-sm" role="group" aria-label="Status Filter">
+                    <button type="button" class="btn btn-outline-secondary active" onclick="filterTableByStatus('ALL', this)">All</button>
+                    <button type="button" class="btn btn-outline-success" onclick="filterTableByStatus('UP', this)">UP</button>
+                    <button type="button" class="btn btn-outline-danger" onclick="filterTableByStatus('DOWN', this)">DOWN</button>
+                    <button type="button" class="btn btn-outline-warning" onclick="filterTableByStatus('FAULT', this)">FAULT</button>
+                </div>
+
+                <!-- Search Input -->
+                <div class="input-group input-group-sm search-box">
+                    <span class="input-group-text bg-dark border-secondary text-secondary">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                    </span>
+                    <input type="text" id="deviceSearchInput" class="form-control bg-dark text-white border-secondary" placeholder="Search devices..." onkeyup="filterDeviceTable()">
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover align-middle mb-0 custom-device-table" id="devicesTable">
+                    <thead class="table-dark-header">
+                        <tr>
+                            <th class="ps-3" style="width: 18%;">Device Name</th>
+                            <th style="width: 16%;">IP Address / Host</th>
+                            <th style="width: 8%;">Port</th>
+                            <th style="width: 12%;">Status</th>
+                            <th style="width: 12%;">Response Time</th>
+                            <th style="width: 16%;">Last Checked</th>
+                            <th style="width: 18%;">Fault Information</th>
+                            <th class="text-end pe-3" style="width: 10%;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="devicesTableBody">
+                        {% if devices %}
+                            {% for dev in devices %}
+                                <tr id="device-row-{{ dev.id }}" data-status="{{ dev.status or 'PENDING' }}" data-search="{{ dev.device_name|lower }} {{ dev.ip_address|lower }}">
+                                    <!-- Device Name -->
+                                    <td class="ps-3">
+                                        <div class="fw-semibold text-white d-flex align-items-center gap-2">
+                                            <i class="fa-solid fa-desktop text-secondary fs-xs"></i>
+                                            <span>{{ dev.device_name }}</span>
+                                        </div>
+                                        {% if dev.description %}
+                                            <div class="text-secondary fs-xs text-truncate" style="max-width: 180px;">{{ dev.description }}</div>
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- IP Address -->
+                                    <td>
+                                        <span class="font-mono text-cyan">{{ dev.ip_address }}</span>
+                                    </td>
+
+                                    <!-- TCP Port -->
+                                    <td>
+                                        {% if dev.tcp_port %}
+                                            <span class="badge bg-dark border border-secondary text-light font-mono">{{ dev.tcp_port }}</span>
+                                        {% else %}
+                                            <span class="text-secondary">-</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- Status Badge -->
+                                    <td>
+                                        {% if dev.status == 'UP' %}
+                                            <span class="status-badge status-up">
+                                                <span class="status-dot"></span> UP
+                                            </span>
+                                        {% elif dev.status == 'DOWN' %}
+                                            <span class="status-badge status-down">
+                                                <span class="status-dot"></span> DOWN
+                                            </span>
+                                        {% elif dev.status == 'FAULT' %}
+                                            <span class="status-badge status-fault">
+                                                <span class="status-dot"></span> FAULT
+                                            </span>
+                                        {% else %}
+                                            <span class="status-badge status-pending">
+                                                <span class="status-dot"></span> PENDING
+                                            </span>
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- Response Time -->
+                                    <td>
+                                        {% if dev.response_time is not none %}
+                                            <span class="fw-semibold text-light font-mono">{{ dev.response_time }} ms</span>
+                                        {% else %}
+                                            <span class="text-secondary">N/A</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- Last Checked -->
+                                    <td class="text-secondary fs-xs">
+                                        {% if dev.last_checked %}
+                                            <span class="last-checked-val">{{ dev.last_checked }}</span>
+                                        {% else %}
+                                            <span class="text-secondary italic">Not checked yet</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- Fault Information -->
+                                    <td>
+                                        {% if dev.status == 'DOWN' %}
+                                            <span class="text-danger fw-semibold fs-xs d-flex align-items-center gap-1">
+                                                <i class="fa-solid fa-circle-exclamation"></i>
+                                                <span>{{ dev.fault_info or 'Device unreachable' }}</span>
+                                            </span>
+                                        {% elif dev.status == 'FAULT' %}
+                                            <span class="text-warning fw-semibold fs-xs d-flex align-items-center gap-1">
+                                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                                <span>{{ dev.fault_info or 'Device reachable but service/port unavailable' }}</span>
+                                            </span>
+                                        {% elif dev.status == 'UP' %}
+                                            <span class="text-secondary fs-xs">-</span>
+                                        {% else %}
+                                            <span class="text-secondary fs-xs">-</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- Actions -->
+                                    <td class="text-end pe-3">
+                                        <div class="btn-group btn-group-sm">
+                                            <!-- Check Single Device Now -->
+                                            <button class="btn btn-outline-cyan btn-sm btn-icon" title="Check Now" onclick="checkSingleDevice({{ dev.id }}, this)">
+                                                <i class="fa-solid fa-bolt"></i>
+                                            </button>
+                                            <!-- View History for Device -->
+                                            <a href="{{ url_for('history_page', device_id=dev.id) }}" class="btn btn-outline-secondary btn-sm btn-icon" title="View History">
+                                                <i class="fa-solid fa-clock-rotate-left"></i>
+                                            </a>
+                                            <!-- Edit Device -->
+                                            <a href="{{ url_for('edit_device_page', device_id=dev.id) }}" class="btn btn-outline-secondary btn-sm btn-icon" title="Edit Device">
+                                                <i class="fa-solid fa-pen-to-square"></i>
+                                            </a>
+                                            <!-- Delete Device -->
+                                            <button class="btn btn-outline-danger btn-sm btn-icon" title="Delete Device" onclick="confirmDeleteDevice({{ dev.id }}, '{{ dev.device_name }}')">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr id="emptyRow">
+                                <td colspan="8" class="text-center py-5 text-secondary">
+                                    <i class="fa-solid fa-server fa-3x mb-3 text-secondary-subtle"></i>
+                                    <h5 class="text-white">No Monitored Devices Yet</h5>
+                                    <p class="fs-sm mb-3">Add your first network device to start automated ICMP and port checking.</p>
+                                    <a href="{{ url_for('add_device_page') }}" class="btn btn-cyan btn-sm">
+                                        <i class="fa-solid fa-plus me-1"></i> Add Network Device
+                                    </a>
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card-footer bg-transparent border-secondary-subtle py-2 d-flex justify-content-between align-items-center fs-xs text-secondary">
+            <div>
+                <i class="fa-solid fa-circle-info me-1"></i>
+                <span>Automated probe executes every <strong>30s</strong> via background daemon thread.</span>
+            </div>
+            <div id="last-update-indicator">
+                <i class="fa-regular fa-clock me-1"></i> Live Auto-Sync Active
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-card-dark text-white border border-secondary">
+            <div class="modal-header border-secondary-subtle">
+                <h5 class="modal-title text-danger d-flex align-items-center gap-2" id="deleteModalTitle">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    Confirm Device Deletion
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong id="deleteDeviceName"></strong>?</p>
+                <p class="text-secondary fs-xs mb-0">
+                    This will permanently delete the device along with all its historical monitoring logs.
+                </p>
+            </div>
+            <div class="modal-footer border-secondary-subtle">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" action="">
+                    <button type="submit" class="btn btn-danger btn-sm d-flex align-items-center gap-1">
+                        <i class="fa-solid fa-trash"></i>
+                        <span>Delete Device</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

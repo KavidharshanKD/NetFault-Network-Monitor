@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}NetFault – Automated Network Fault Detection & Monitoring{% endblock %}</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark-glass sticky-top border-bottom border-secondary-subtle">
+        <div class="container-fluid px-lg-4">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('dashboard') }}">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-network-wired text-cyan"></i>
+                </div>
+                <div>
+                    <span class="brand-title fw-bold">Net<span class="text-cyan">Fault</span></span>
+                    <span class="badge bg-dark-subtle text-cyan-subtle border border-cyan-subtle ms-1 fs-xs">v1.0</span>
+                </div>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain" aria-controls="navbarMain" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarMain">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-3 gap-1">
+                    <li class="nav-item">
+                        <a class="nav-link px-3 {% if request.endpoint == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+                            <i class="fa-solid fa-chart-line me-1"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3 {% if request.endpoint == 'devices_page' %}active{% endif %}" href="{{ url_for('devices_page') }}">
+                            <i class="fa-solid fa-server me-1"></i> Devices
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3 {% if request.endpoint == 'add_device_page' and not is_edit %}active{% endif %}" href="{{ url_for('add_device_page') }}">
+                            <i class="fa-solid fa-plus-circle me-1"></i> Add Device
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link px-3 {% if request.endpoint == 'history_page' %}active{% endif %}" href="{{ url_for('history_page') }}">
+                            <i class="fa-solid fa-clock-rotate-left me-1"></i> Monitoring History
+                        </a>
+                    </li>
+                </ul>
+
+                <!-- Top Navbar Right Status & Controls -->
+                <div class="d-flex align-items-center gap-3">
+                    <div class="auto-monitor-badge d-none d-md-flex align-items-center gap-2 px-3 py-1 rounded-pill bg-dark border border-secondary">
+                        <span class="pulse-indicator"></span>
+                        <span class="fs-xs text-secondary-emphasis">Auto-Monitor: <strong class="text-white">Active (30s)</strong></span>
+                    </div>
+                    <button class="btn btn-sm btn-outline-cyan d-flex align-items-center gap-2" id="globalCheckAllBtn" onclick="triggerCheckAll(this)">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span>Check All Devices</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="container-fluid px-lg-4 py-4">
+        <!-- Flash Alert Messages -->
+        <div id="flash-container">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show d-flex align-items-center gap-2 shadow-sm" role="alert">
+                            {% if category == 'success' %}
+                                <i class="fa-solid fa-circle-check text-success"></i>
+                            {% elif category == 'danger' %}
+                                <i class="fa-solid fa-triangle-exclamation text-danger"></i>
+                            {% else %}
+                                <i class="fa-solid fa-circle-info text-info"></i>
+                            {% endif %}
+                            <div>{{ message }}</div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer border-top border-secondary-subtle py-3 mt-5">
+        <div class="container-fluid px-lg-4 d-flex flex-column flex-md-row justify-content-between align-items-center gap-2 text-secondary fs-xs">
+            <div>
+                <strong>NetFault</strong> – Automated Network Fault Detection and Monitoring System
+            </div>
+            <div>
+                <span>Computer Networks / Software Engineering Project</span> &bull; <span>Flask &bull; SQLite &bull; ICMP/TCP</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Bootstrap 5 Bundle JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom Application JS -->
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

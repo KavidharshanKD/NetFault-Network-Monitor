@@ -1,0 +1,301 @@
+/*
+ NetFault – Automated Network Fault Detection & Monitoring System
+ Stylesheet: Cyber-Clean Dark Theme
+*/
+
+:root {
+    --bg-dark: #0b0f19;
+    --bg-card: #131b2e;
+    --bg-card-hover: #19243d;
+    --border-color: #1e293b;
+    --border-color-subtle: #293548;
+    
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    
+    --cyan: #06b6d4;
+    --cyan-subtle: rgba(6, 182, 212, 0.15);
+    
+    --status-up: #10b981;
+    --status-up-bg: rgba(16, 185, 129, 0.12);
+    --status-up-border: rgba(16, 185, 129, 0.35);
+    
+    --status-down: #ef4444;
+    --status-down-bg: rgba(239, 68, 68, 0.12);
+    --status-down-border: rgba(239, 68, 68, 0.35);
+    
+    --status-fault: #f59e0b;
+    --status-fault-bg: rgba(245, 158, 11, 0.12);
+    --status-fault-border: rgba(245, 158, 11, 0.35);
+    
+    --status-pending: #64748b;
+    --status-pending-bg: rgba(100, 116, 139, 0.12);
+    --status-pending-border: rgba(100, 116, 139, 0.35);
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: var(--text-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    flex: 1;
+}
+
+/* Glassmorphism Navbar */
+.bg-dark-glass {
+    background-color: rgba(11, 15, 25, 0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.brand-icon {
+    width: 36px;
+    height: 36px;
+    background: rgba(6, 182, 212, 0.1);
+    border: 1px solid rgba(6, 182, 212, 0.3);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+}
+
+.brand-title {
+    font-size: 1.25rem;
+    letter-spacing: -0.5px;
+}
+
+.text-cyan {
+    color: var(--cyan) !important;
+}
+
+.hover-cyan:hover {
+    color: var(--cyan) !important;
+}
+
+.btn-cyan {
+    background-color: var(--cyan);
+    color: #0b0f19;
+    font-weight: 600;
+    border: none;
+}
+
+.btn-cyan:hover {
+    background-color: #0891b2;
+    color: #ffffff;
+}
+
+.btn-outline-cyan {
+    color: var(--cyan);
+    border-color: var(--cyan);
+}
+
+.btn-outline-cyan:hover {
+    background-color: var(--cyan);
+    color: #0b0f19;
+}
+
+.font-mono {
+    font-family: 'JetBrains Mono', Consolas, Monaco, monospace !important;
+    font-size: 0.88rem;
+}
+
+.fs-xs {
+    font-size: 0.75rem !important;
+}
+
+.fs-sm {
+    font-size: 0.85rem !important;
+}
+
+.letter-spacing-1 {
+    letter-spacing: 0.05em;
+}
+
+/* Status Cards */
+.bg-card-dark {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+}
+
+.metric-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border-radius: 12px;
+}
+
+.metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.4) !important;
+}
+
+.metric-icon-box {
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.border-start-status {
+    border-left-width: 4px !important;
+}
+
+.border-up {
+    border-left-color: var(--status-up) !important;
+}
+
+.border-down {
+    border-left-color: var(--status-down) !important;
+}
+
+.border-fault {
+    border-left-color: var(--status-fault) !important;
+}
+
+/* Status Badges */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-up {
+    background-color: var(--status-up-bg);
+    color: var(--status-up);
+    border: 1px solid var(--status-up-border);
+}
+.status-up .status-dot {
+    background-color: var(--status-up);
+    box-shadow: 0 0 8px var(--status-up);
+}
+
+.status-down {
+    background-color: var(--status-down-bg);
+    color: var(--status-down);
+    border: 1px solid var(--status-down-border);
+}
+.status-down .status-dot {
+    background-color: var(--status-down);
+    box-shadow: 0 0 8px var(--status-down);
+}
+
+.status-fault {
+    background-color: var(--status-fault-bg);
+    color: var(--status-fault);
+    border: 1px solid var(--status-fault-border);
+}
+.status-fault .status-dot {
+    background-color: var(--status-fault);
+    box-shadow: 0 0 8px var(--status-fault);
+}
+
+.status-pending {
+    background-color: var(--status-pending-bg);
+    color: var(--status-pending);
+    border: 1px solid var(--status-pending-border);
+}
+.status-pending .status-dot {
+    background-color: var(--status-pending);
+}
+
+/* Pulsing Auto-Monitor Dot */
+.pulse-indicator {
+    width: 8px;
+    height: 8px;
+    background-color: var(--status-up);
+    border-radius: 50%;
+    display: inline-block;
+    position: relative;
+}
+
+.pulse-indicator::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    border-radius: 50%;
+    border: 1px solid var(--status-up);
+    animation: pulsePing 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes pulsePing {
+    0% { transform: scale(0.95); opacity: 1; }
+    70% { transform: scale(2.2); opacity: 0; }
+    100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* Tables */
+.custom-device-table {
+    --bs-table-bg: transparent;
+    --bs-table-hover-bg: rgba(255, 255, 255, 0.03);
+    margin-bottom: 0;
+}
+
+.table-dark-header {
+    background-color: rgba(15, 23, 42, 0.7);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.table-dark-header th {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    padding: 12px 14px;
+}
+
+.custom-device-table tbody td {
+    padding: 14px 14px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+/* Action button icons */
+.btn-icon {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+}
+
+/* Presets Box */
+.preset-box {
+    border-style: dashed !important;
+}
+
+.btn-xs {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+/* Footer */
+.footer {
+    background-color: rgba(11, 15, 25, 0.95);
+}

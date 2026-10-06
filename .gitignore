@@ -1,0 +1,40 @@
+# Python bytecode & caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+
+# SQLite database (auto-generated at runtime, don't commit)
+data/
+*.db
+*.sqlite3
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor artifacts
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Environment files
+.env
+.env.local
+
+# Log files
+*.log
+
+# Pytest cache
+.pytest_cache/
