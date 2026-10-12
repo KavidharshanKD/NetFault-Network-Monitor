@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+
+{% block title %}Device Details: {{ device.device_name }} — Automated Fault Detection System{% endblock %}
+{% block page_title %}{{ device.device_name }}{% endblock %}
+
+{% block top_actions %}
+    <button class="btn btn-primary btn-sm" onclick="triggerDeviceCheck({{ device.id }})" id="details-check-btn">
+        Check Now
+    </button>
+    <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-sm">
+        Edit Device
+    </a>
+    <a href="{{ url_for('device_list') }}" class="btn btn-sm">
+        Back to Inventory
+    </a>
+{% endblock %}
+
+{% block content %}
+    <!-- Device Operational Status Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Current Diagnostic Status</span>
+            <div>
+                {% if device.overall_status == 'UP' %}
+                    <span class="status-badge status-up" style="font-size: 13px; padding: 4px 12px;">● UP</span>
+                {% elif device.overall_status == 'DOWN' %}
+                    <span class="status-badge status-down" style="font-size: 13px; padding: 4px 12px;">✕ DOWN</span>
+                {% elif device.overall_status == 'FAULT' %}
+                    <span class="status-badge status-fault" style="font-size: 13px; padding: 4px 12px;">▲ FAULT</span>
+                {% else %}
+                    <span class="status-badge status-pending" style="font-size: 13px; padding: 4px 12px;">○ UNCHECKED</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="detail-grid">
+            <div class="detail-item">
+                <div class="detail-label">IP Address</div>
+                <div class="detail-value mono">{{ device.ip_address }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">Configured TCP Port</div>
+                <div class="detail-value mono">
+                    {% if device.port %}{{ device.port }}{% else %}<span class="text-muted">None (Ping Only)</span>{% endif %}
+                </div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">ICMP Reachability</div>
+                <div class="detail-value mono">{{ device.reachability_status or 'UNCHECKED' }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">TCP Service State</div>
+                <div class="detail-value mono">{{ device.service_status or 'NOT_CHECKED' }}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">Measured Response Time</div>
+                <div class="detail-value mono">
+                    {% if device.response_time_ms is not none %}
+                        {{ device.response_time_ms }} ms
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">Last Checked Timestamp</div>
+                <div class="detail-value mono text-small">{{ device.last_checked or 'Never' }}</div>
+            </div>
+        </div>
+
+        <div style="margin-top: 16px; padding: 12px 16px; border: 1px solid var(--border-subtle); background-color: var(--bg-subtle);">
+            <div class="detail-label">Diagnostic & Fault Details</div>
+            <div style="font-size: 13px; margin-top: 4px;">
+                {% if device.fault_details %}
+                    {{ device.fault_details }}
+                {% else %}
+                    <span class="text-muted">No faults or diagnostics recorded. Device is awaiting check or operating nominally.</span>
+                {% endif %}
+            </div>
+            {% if device.description %}
+                <div style="margin-top: 10px; font-size: 12px; color: var(--text-muted);">
+                    <strong>Description:</strong> {{ device.description }}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Recent History Records Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Recent Monitoring History</span>
+            <span class="text-muted text-small">Last {{ history|length }} checks</span>
+        </div>
+
+        {% if history|length == 0 %}
+            <div class="empty-state">
+                <div class="empty-state-title">No History Logged Yet</div>
+                <div class="empty-state-desc">
+                    Click "Check Now" above to run an on-demand ICMP and TCP diagnostic check on this host.
+                </div>
+            </div>
+        {% else %}
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Checked At</th>
+                            <th>Overall Status</th>
+                            <th>ICMP Reachability</th>
+                            <th>TCP Service</th>
+                            <th>Response Time</th>
+                            <th>Diagnostic / Fault Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for record in history %}
+                            <tr>
+                                <td class="mono text-small">{{ record.checked_at }}</td>
+                                <td>
+                                    {% if record.overall_status == 'UP' %}
+                                        <span class="status-badge status-up">● UP</span>
+                                    {% elif record.overall_status == 'DOWN' %}
+                                        <span class="status-badge status-down">✕ DOWN</span>
+                                    {% elif record.overall_status == 'FAULT' %}
+                                        <span class="status-badge status-fault">▲ FAULT</span>
+                                    {% else %}
+                                        <span class="status-badge status-pending">○ {{ record.overall_status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="mono text-small">{{ record.reachability_status }}</td>
+                                <td class="mono text-small">{{ record.service_status }}</td>
+                                <td class="mono">
+                                    {% if record.response_time_ms is not none %}
+                                        {{ record.response_time_ms }} ms
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-small">{{ record.fault_details or '—' }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function triggerDeviceCheck(deviceId) {
+        const btn = document.getElementById('details-check-btn');
+        if (!btn) return;
+        btn.disabled = true;
+        btn.textContent = 'Checking...';
+
+        try {
+            const resp = await fetch(`/api/devices/${deviceId}/check`, { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) {
+                showToast("Check completed successfully. Refreshing details...");
+                setTimeout(() => {
+                    window.location.reload();
+                }, 800);
+            } else {
+                showToast("Check failed: " + (data.error || "Unknown error"));
+                btn.disabled = false;
+                btn.textContent = 'Check Now';
+            }
+        } catch (e) {
+            showToast("Network error: " + e.message);
+            btn.disabled = false;
+            btn.textContent = 'Check Now';
+        }
+    }
+</script>
+{% endblock %}

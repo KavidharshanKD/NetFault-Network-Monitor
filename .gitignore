@@ -1,40 +1,35 @@
-# Python bytecode & caches
+# Python bytecode & cache
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
-*.egg
-*.egg-info/
-dist/
-build/
+*$py.class
 
-# SQLite database (auto-generated at runtime, don't commit)
-data/
-*.db
-*.sqlite3
-
-# Virtual environments
+# Environments
 venv/
-.venv/
 env/
-.env/
+ENV/
+.venv/
 
-# OS-generated files
-.DS_Store
-Thumbs.db
-
-# IDE / Editor artifacts
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
-
-# Environment files
+# Environment variables & local secrets
 .env
 .env.local
 
-# Log files
-*.log
+# Databases & Runtime Data
+instance/*.db
+instance/*.sqlite
+instance/*.sqlite3
+data/*.db
+data/*.sqlite3
 
-# Pytest cache
+# Logs
+logs/*.log
+
+# IDE & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testing & Coverage
 .pytest_cache/
+.coverage
+htmlcov/
