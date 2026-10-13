@@ -8,6 +8,7 @@ import os
 import sys
 import secrets
 import hmac
+import json
 import logging
 from flask import (
     Flask, render_template, request, redirect, url_for, flash, jsonify,
@@ -286,7 +287,19 @@ def create_app(config_object=Config):
 
         history = database.get_device_history(device_id, limit=25)
         timeseries = database.get_history_timeseries(device_id=device_id, limit=15)
-        return render_template('device_details.html', device=device, history=history, timeseries=timeseries)
+        traceroutes = database.get_device_traceroutes(device_id, limit=5)
+        for t in traceroutes:
+            try:
+                t['hops'] = json.loads(t['hops_json'])
+            except Exception:
+                t['hops'] = []
+        return render_template(
+            'device_details.html',
+            device=device,
+            history=history,
+            timeseries=timeseries,
+            traceroutes=traceroutes
+        )
 
     @app.route('/history')
     def history_view():
@@ -551,6 +564,61 @@ def create_app(config_object=Config):
         device_id = int(device_id_raw) if device_id_raw and device_id_raw.isdigit() else None
         data = database.get_history_timeseries(device_id=device_id, limit=20)
         return jsonify(data)
+
+    @app.route('/api/devices/<int:device_id>/traceroute', methods=['POST'])
+    def api_device_traceroute(device_id):
+        """
+        Executes a hop-by-hop traceroute to localize packet loss or routing breaks.
+        Persists results to database and returns structured hops.
+        """
+        if not validate_csrf_token():
+            return jsonify({'success': False, 'error': 'CSRF token missing or invalid'}), 400
+
+        device = database.get_device_by_id(device_id)
+        if not device:
+            return jsonify({'success': False, 'error': 'Device not found'}), 404
+
+        max_hops = min(20, max(5, int(request.json.get('max_hops', 15) if request.is_json else 15)))
+        timeout_ms = min(3000, max(500, int(request.json.get('timeout_ms', 1000) if request.is_json else 1000)))
+
+        trace_result = monitoring.run_traceroute(
+            target_ip=device['ip_address'],
+            max_hops=max_hops,
+            timeout_ms=timeout_ms
+        )
+
+        trace_id = database.save_traceroute(
+            device_id=device['id'],
+            target_ip=device['ip_address'],
+            total_hops=trace_result['total_hops'],
+            destination_reached=trace_result['destination_reached'],
+            fault_hop=trace_result['fault_hop'],
+            fault_summary=trace_result['fault_summary'],
+            hops_json=json.dumps(trace_result['hops']),
+            raw_output=trace_result['raw_output']
+        )
+
+        return jsonify({
+            'success': True,
+            'trace_id': trace_id,
+            'result': trace_result
+        })
+
+    @app.route('/api/devices/<int:device_id>/traceroutes')
+    def api_device_traceroute_history(device_id):
+        """Returns recent traceroute history for a device."""
+        device = database.get_device_by_id(device_id)
+        if not device:
+            return jsonify({'success': False, 'error': 'Device not found'}), 404
+
+        limit = min(20, int(request.args.get('limit', 5)))
+        traces = database.get_device_traceroutes(device_id, limit=limit)
+        for t in traces:
+            try:
+                t['hops'] = json.loads(t['hops_json'])
+            except Exception:
+                t['hops'] = []
+        return jsonify({'success': True, 'traceroutes': traces})
 
     # ---------------------------------------------------------
     # Error Handlers

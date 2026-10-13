@@ -137,6 +137,182 @@
     </div>
 </div>
 
+<!-- Hop-by-Hop Fault Localization & Traceroute Card -->
+<div class="card" id="traceroute-section" style="margin-top: 20px;">
+    <div class="card-header">
+        <div>
+            <span class="card-title">Hop-by-Hop Fault Localization & Route Trace</span>
+            <div class="text-muted" style="font-size: 11.5px; margin-top: 2px;">
+                Layer 3 packet routing inspection to pinpoint network breaks and gateway packet loss
+            </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="btn btn-sm btn-primary" id="btn-run-traceroute" onclick="triggerTraceroute({{ device.id }})" title="Trace path from server to {{ device.ip_address }}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                </svg>
+                <span id="trace-btn-text">Run Route Trace</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Live Execution Status Bar -->
+    <div id="trace-loading-bar" style="display: none; padding: 18px; text-align: center; background: var(--surface-subtle); border-radius: var(--radius-sm); border: 1px dashed var(--border-subtle); margin-bottom: 16px;">
+        <span class="trace-spinner" style="border-top-color: var(--brand-accent); width: 18px; height: 18px; border-width: 3px;"></span>
+        <strong style="margin-left: 10px; color: var(--text-primary);">Probing intermediate router hops to {{ device.ip_address }}...</strong>
+        <div class="text-muted" style="font-size: 11.5px; margin-top: 4px;">Executing OS traceroute with bounded TTLs (this typically takes 3–8 seconds).</div>
+    </div>
+
+    <div id="trace-results-container">
+        {% if traceroutes and traceroutes|length > 0 %}
+            {% set latest_trace = traceroutes[0] %}
+            <!-- Diagnostic Assessment Banner -->
+            <div class="trace-diagnosis-box {% if latest_trace.destination_reached %}success{% elif latest_trace.fault_hop %}fault{% else %}down{% endif %}">
+                <div style="font-size: 18px; line-height: 1;">
+                    {% if latest_trace.destination_reached %}✅{% elif latest_trace.fault_hop %}⚠️{% else %}❌{% endif %}
+                </div>
+                <div style="flex: 1;">
+                    <strong style="display: block; margin-bottom: 2px;">
+                        {% if latest_trace.destination_reached %}
+                            Route Path Verified ({{ latest_trace.total_hops }} Hops Observed)
+                        {% elif latest_trace.fault_hop %}
+                            Fault Localized at Hop {{ latest_trace.fault_hop }}
+                        {% else %}
+                            Route Interrupted
+                        {% endif %}
+                    </strong>
+                    <div>{{ latest_trace.fault_summary }}</div>
+                    <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;" class="mono">
+                        Last inspected: {{ latest_trace.executed_at }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visual Hop Pipeline Flow -->
+            <div class="traceroute-flow-container">
+                <div class="traceroute-flow">
+                    <!-- Origin Node -->
+                    <div class="hop-node hop-node-success">
+                        <span class="hop-badge hop-badge-success">ORIGIN</span>
+                        <div class="hop-ip">Localhost</div>
+                        <div class="hop-rtt">Monitoring Host</div>
+                    </div>
+
+                    {% for h in latest_trace.hops %}
+                        <div class="hop-arrow">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                                <polyline points="12 5 19 12 12 19"></polyline>
+                            </svg>
+                        </div>
+
+                        <div class="hop-node {% if h.status == 'SUCCESS' %}hop-node-success{% elif h.status == 'TIMED_OUT' %}hop-node-error{% else %}hop-node-warning{% endif %}">
+                            <span class="hop-badge {% if h.status == 'SUCCESS' %}hop-badge-success{% elif h.status == 'TIMED_OUT' %}hop-badge-error{% else %}hop-badge-warning{% endif %}">
+                                Hop {{ h.hop }}
+                            </span>
+                            <div class="hop-ip">
+                                {% if h.ip == '*' %}
+                                    <span style="color: var(--status-down-text);">Request timed out</span>
+                                {% else %}
+                                    {{ h.ip }}
+                                {% endif %}
+                            </div>
+                            <div class="hop-rtt">
+                                {% if h.avg_rtt_ms is not none %}
+                                    <strong>{{ h.avg_rtt_ms }} ms</strong> (avg)
+                                {% else %}
+                                    <span>Packet loss (100%)</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+
+                    <!-- Target Endpoint Node -->
+                    <div class="hop-arrow">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                            <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
+                    </div>
+
+                    <div class="hop-node {% if latest_trace.destination_reached %}hop-node-success{% else %}hop-node-error{% endif %}">
+                        <span class="hop-badge {% if latest_trace.destination_reached %}hop-badge-success{% else %}hop-badge-error{% endif %}">
+                            TARGET
+                        </span>
+                        <div class="hop-ip">{{ device.ip_address }}</div>
+                        <div class="hop-rtt">
+                            {% if latest_trace.destination_reached %}REACHED{% else %}UNREACHABLE{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Hop Breakdown Table -->
+            <div class="table-responsive" style="margin-top: 14px;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 70px;">Hop #</th>
+                            <th>Gateway / Router IP</th>
+                            <th>Probe 1</th>
+                            <th>Probe 2</th>
+                            <th>Probe 3</th>
+                            <th>Average Latency</th>
+                            <th>Hop Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for h in latest_trace.hops %}
+                            <tr>
+                                <td class="mono"><strong>#{{ h.hop }}</strong></td>
+                                <td>
+                                    {% if h.ip == '*' %}
+                                        <span class="text-muted mono">* (Packet Dropped)</span>
+                                    {% else %}
+                                        <span class="ip-chip">{{ h.ip }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="mono text-muted">{{ h.rtt1 }}</td>
+                                <td class="mono text-muted">{{ h.rtt2 }}</td>
+                                <td class="mono text-muted">{{ h.rtt3 }}</td>
+                                <td class="mono">
+                                    {% if h.avg_rtt_ms is not none %}
+                                        <strong>{{ h.avg_rtt_ms }} ms</strong>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if h.status == 'SUCCESS' %}
+                                        <span class="badge badge-up">REACHED</span>
+                                    {% elif h.status == 'HIGH_LATENCY' %}
+                                        <span class="badge badge-fault">HIGH LATENCY</span>
+                                    {% elif h.status == 'PARTIAL_LOSS' %}
+                                        <span class="badge badge-fault">PARTIAL LOSS</span>
+                                    {% else %}
+                                        <span class="badge badge-down">TIMED OUT</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <!-- Initial Empty State -->
+            <div class="empty-table-state" style="padding: 32px 16px;">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                </svg>
+                <p><strong>No hop-by-hop traceroute recorded for this host yet.</strong></p>
+                <p style="margin-top: 4px; font-size: 12px;">Click "Run Route Trace" above to probe intermediate gateway hops and localize routing bottlenecks.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
 <!-- Recent Monitoring History Table -->
 <div class="card" style="margin-top: 20px;">
     <div class="card-header">
@@ -271,6 +447,44 @@ async function triggerDeviceCheck(deviceId) {
             btn.disabled = false;
             btn.textContent = "Check Now";
         }
+    }
+}
+
+async function triggerTraceroute(deviceId) {
+    const btn = document.getElementById('btn-run-traceroute');
+    const btnText = document.getElementById('trace-btn-text');
+    const loadingBar = document.getElementById('trace-loading-bar');
+
+    if (btn) btn.disabled = true;
+    if (btnText) btnText.innerHTML = '<span class="trace-spinner"></span> Tracing Route...';
+    if (loadingBar) loadingBar.style.display = 'block';
+
+    try {
+        const response = await fetch(`/api/devices/${deviceId}/traceroute`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ max_hops: 15, timeout_ms: 1000 })
+        });
+
+        const data = await response.json();
+        if (data.success && data.result) {
+            const res = data.result;
+            showToast(`Traceroute complete: ${res.total_hops} hops observed.`);
+            setTimeout(() => location.reload(), 700);
+        } else {
+            showToast(data.error || "Traceroute execution failed", true);
+            if (loadingBar) loadingBar.style.display = 'none';
+        }
+    } catch (err) {
+        console.error("Traceroute error:", err);
+        showToast("Network error executing route trace", true);
+        if (loadingBar) loadingBar.style.display = 'none';
+    } finally {
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.textContent = 'Run Route Trace';
     }
 }
 

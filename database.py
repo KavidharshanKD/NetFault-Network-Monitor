@@ -68,6 +68,22 @@ def init_db(db_path=None):
                 );
             """)
 
+            # Traceroute hop-by-hop history table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS traceroute_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+                    target_ip TEXT NOT NULL,
+                    total_hops INTEGER NOT NULL DEFAULT 0,
+                    destination_reached INTEGER NOT NULL DEFAULT 0,
+                    fault_hop INTEGER,
+                    fault_summary TEXT,
+                    hops_json TEXT NOT NULL,
+                    raw_output TEXT,
+                    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+
             # Schema Migration Checks
             # Check devices columns
             dev_columns = [row['name'] for row in conn.execute("PRAGMA table_info(devices);").fetchall()]
@@ -85,6 +101,7 @@ def init_db(db_path=None):
             conn.execute("CREATE INDEX IF NOT EXISTS idx_history_status ON monitoring_history(overall_status);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_history_category ON monitoring_history(fault_category);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_devices_ip_port ON devices(ip_address, port);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_traceroute_device ON traceroute_history(device_id, executed_at DESC);")
 
             # Default settings seed
             default_settings = [
@@ -789,3 +806,58 @@ def get_dashboard_summary(db_path=None):
         'pending_count': pending_count,
         'avg_response_time_ms': avg_response_time
     }
+
+# ---------------------------------------------------------
+# Traceroute Hop-by-Hop Persistence
+# ---------------------------------------------------------
+
+def save_traceroute(device_id, target_ip, total_hops, destination_reached, fault_hop, fault_summary, hops_json, raw_output, db_path=None):
+    """
+    Persists a hop-by-hop traceroute execution result into traceroute_history.
+    Returns the newly inserted record ID.
+    """
+    conn = get_db_connection(db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO traceroute_history 
+            (device_id, target_ip, total_hops, destination_reached, fault_hop, fault_summary, hops_json, raw_output)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        """, (
+            device_id, target_ip, total_hops,
+            1 if destination_reached else 0,
+            fault_hop, fault_summary, hops_json, raw_output
+        ))
+        trace_id = cur.lastrowid
+        conn.commit()
+        return trace_id
+    finally:
+        conn.close()
+
+def get_device_traceroutes(device_id, limit=5, db_path=None):
+    """
+    Retrieves the most recent traceroute execution records for a device.
+    """
+    conn = get_db_connection(db_path)
+    try:
+        rows = conn.execute("""
+            SELECT * FROM traceroute_history
+            WHERE device_id = ?
+            ORDER BY executed_at DESC, id DESC
+            LIMIT ?;
+        """, (device_id, limit)).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+def get_traceroute_by_id(trace_id, db_path=None):
+    """
+    Retrieves a single traceroute record by ID.
+    """
+    conn = get_db_connection(db_path)
+    try:
+        row = conn.execute("SELECT * FROM traceroute_history WHERE id = ?;", (trace_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+

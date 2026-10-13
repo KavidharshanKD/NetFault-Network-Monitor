@@ -5,6 +5,7 @@ concurrency settings, and CASCADE deletions.
 """
 
 import os
+import json
 import unittest
 import tempfile
 import database
@@ -136,6 +137,44 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(settings['ping_count'], 3)
         self.assertEqual(settings['concurrency_limit'], 8)
         self.assertEqual(settings['auto_monitoring'], 0)
+
+    def test_traceroute_persistence(self):
+        """Test saving, retrieving, and cascade deleting traceroute records."""
+        dev_id = database.create_device(
+            device_name="Traceroute Target",
+            ip_address="8.8.8.8",
+            db_path=self.temp_db_path
+        )
+        hops_sample = json.dumps([
+            {"hop": 1, "ip": "192.168.1.1", "status": "SUCCESS"},
+            {"hop": 2, "ip": "8.8.8.8", "status": "SUCCESS"}
+        ])
+        trace_id = database.save_traceroute(
+            device_id=dev_id,
+            target_ip="8.8.8.8",
+            total_hops=2,
+            destination_reached=True,
+            fault_hop=None,
+            fault_summary="Route complete in 2 hops",
+            hops_json=hops_sample,
+            raw_output="Hop 1\nHop 2\n",
+            db_path=self.temp_db_path
+        )
+        self.assertIsNotNone(trace_id)
+
+        traces = database.get_device_traceroutes(dev_id, db_path=self.temp_db_path)
+        self.assertEqual(len(traces), 1)
+        self.assertEqual(traces[0]['destination_reached'], 1)
+        self.assertEqual(traces[0]['total_hops'], 2)
+
+        single_trace = database.get_traceroute_by_id(trace_id, db_path=self.temp_db_path)
+        self.assertIsNotNone(single_trace)
+        self.assertEqual(single_trace['target_ip'], "8.8.8.8")
+
+        # Verify cascading delete
+        database.delete_device(dev_id, db_path=self.temp_db_path)
+        traces_after = database.get_device_traceroutes(dev_id, db_path=self.temp_db_path)
+        self.assertEqual(len(traces_after), 0)
 
 if __name__ == '__main__':
     unittest.main()

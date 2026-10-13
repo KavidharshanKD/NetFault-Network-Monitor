@@ -189,6 +189,31 @@ class TestRoutes(unittest.TestCase):
             chart_data = resp.get_json()
             self.assertIn('response_times', chart_data)
 
+    @patch('monitoring.run_traceroute')
+    def test_traceroute_endpoints(self, mock_trace):
+        """Test traceroute trigger API and historical fetch API."""
+        mock_trace.return_value = {
+            'target_ip': '127.0.0.1',
+            'total_hops': 1,
+            'destination_reached': True,
+            'fault_hop': None,
+            'fault_summary': 'Direct loopback reach',
+            'hops': [{'hop': 1, 'ip': '127.0.0.1', 'status': 'SUCCESS'}],
+            'raw_output': 'Trace complete'
+        }
+        with patch('database.Config.DATABASE_PATH', self.temp_db_path):
+            resp = self.client.post(f'/api/devices/{self.test_dev_id}/traceroute')
+            self.assertEqual(resp.status_code, 200)
+            data = resp.get_json()
+            self.assertTrue(data['success'])
+            self.assertEqual(data['result']['total_hops'], 1)
+
+            resp_hist = self.client.get(f'/api/devices/{self.test_dev_id}/traceroutes')
+            self.assertEqual(resp_hist.status_code, 200)
+            hist_data = resp_hist.get_json()
+            self.assertTrue(hist_data['success'])
+            self.assertEqual(len(hist_data['traceroutes']), 1)
+
     def test_404_error_page(self):
         """Accessing undefined route yields 404 template."""
         resp = self.client.get('/this-path-does-not-exist')

@@ -317,3 +317,192 @@ def check_device_connectivity(device, settings=None):
         'fault_category': fault_category,
         'fault_details': fault_details
     }
+
+
+# ---------------------------------------------------------
+# Hop-by-Hop Fault Localization & Traceroute Diagnostics
+# ---------------------------------------------------------
+
+def parse_tracert_output(output, target_ip):
+    """
+    Parses native Windows tracert and Linux traceroute output into structured hop telemetry.
+    Localizes the exact hop where packet loss or failure occurs.
+    """
+    hops = []
+    lines = output.strip().splitlines()
+    destination_reached = False
+    hop_regex = re.compile(r'^\s*(\d+)\s+(.+)$')
+
+    for line in lines:
+        match = hop_regex.match(line)
+        if not match:
+            continue
+
+        hop_num = int(match.group(1))
+        rest = match.group(2).strip()
+
+        # Check for request timed out
+        if "Request timed out" in rest or rest.count('*') == 3:
+            hops.append({
+                'hop': hop_num,
+                'ip': '*',
+                'rtt1': '*',
+                'rtt2': '*',
+                'rtt3': '*',
+                'avg_rtt_ms': None,
+                'status': 'TIMED_OUT'
+            })
+            continue
+
+        # Extract IP address from the end of the line
+        ip_match = re.search(r'([0-9a-fA-F\:\.]{7,45})\s*$', rest)
+        hop_ip = ip_match.group(1) if ip_match else "Unknown"
+
+        # Extract time values
+        time_tokens = re.findall(r'(?:<1|\d+|\*)\s*(?:ms)?', rest)
+        cleaned_times = []
+        numeric_times = []
+        for token in time_tokens:
+            t = token.strip()
+            if not t or t == hop_ip:
+                continue
+            if t == '*':
+                cleaned_times.append('*')
+            elif '<' in t:
+                cleaned_times.append('<1 ms')
+                numeric_times.append(0.5)
+            elif 'ms' in t:
+                cleaned_times.append(t)
+                val = re.search(r'(\d+)', t)
+                if val:
+                    numeric_times.append(float(val.group(1)))
+            if len(cleaned_times) == 3:
+                break
+
+        rtt1 = cleaned_times[0] if len(cleaned_times) > 0 else '*'
+        rtt2 = cleaned_times[1] if len(cleaned_times) > 1 else '*'
+        rtt3 = cleaned_times[2] if len(cleaned_times) > 2 else '*'
+
+        avg_rtt = round(sum(numeric_times) / len(numeric_times), 1) if numeric_times else None
+
+        if hop_ip == target_ip or (target_ip in ('127.0.0.1', 'localhost') and hop_ip in ('127.0.0.1', 'localhost', '::1')):
+            destination_reached = True
+
+        if not numeric_times:
+            status = 'TIMED_OUT'
+        elif '*' in (rtt1, rtt2, rtt3):
+            status = 'PARTIAL_LOSS'
+        elif avg_rtt and avg_rtt > 100:
+            status = 'HIGH_LATENCY'
+        else:
+            status = 'SUCCESS'
+
+        hops.append({
+            'hop': hop_num,
+            'ip': hop_ip,
+            'rtt1': rtt1,
+            'rtt2': rtt2,
+            'rtt3': rtt3,
+            'avg_rtt_ms': avg_rtt,
+            'status': status
+        })
+
+        if destination_reached:
+            break
+
+    # Fault Localization Root-Cause Analysis
+    fault_hop = None
+    if destination_reached:
+        fault_summary = f"Route trace complete. Target {target_ip} reached in {len(hops)} hop(s) with nominal path latency."
+    else:
+        last_good_hop = None
+        first_bad_hop = None
+        for h in hops:
+            if h['status'] != 'TIMED_OUT' and h['ip'] != '*':
+                last_good_hop = h
+            elif first_bad_hop is None:
+                first_bad_hop = h
+
+        if first_bad_hop is not None:
+            fault_hop = first_bad_hop['hop']
+            if last_good_hop is not None:
+                fault_summary = f"Packet drop localized after Hop {last_good_hop['hop']} ({last_good_hop['ip']}). Traffic dropped entering upstream router at Hop {first_bad_hop['hop']}."
+            else:
+                fault_summary = f"Packet drop localized at Hop 1. Default gateway or local network interface failed to route traffic to {target_ip}."
+        else:
+            fault_summary = f"Target {target_ip} did not return echo replies within the hop limit ({len(hops)} hops observed)."
+
+    return {
+        'target_ip': target_ip,
+        'total_hops': len(hops),
+        'destination_reached': destination_reached,
+        'fault_hop': fault_hop,
+        'fault_localized': not destination_reached,
+        'fault_summary': fault_summary,
+        'hops': hops,
+        'raw_output': output
+    }
+
+def run_traceroute(target_ip, max_hops=15, timeout_ms=1000):
+    """
+    Executes a hop-by-hop traceroute to target_ip using the native OS utility.
+    Under Windows: tracert -d -h <max_hops> -w <timeout_ms> <target_ip>
+    Under Linux/macOS: traceroute -n -m <max_hops> -w <timeout_sec> <target_ip>
+    Returns structured hop telemetry and localized fault diagnosis.
+    """
+    is_valid, err_msg, _ = validate_ip_address(target_ip)
+    if not is_valid and target_ip not in ('localhost', '127.0.0.1'):
+        return {
+            'target_ip': target_ip,
+            'total_hops': 0,
+            'destination_reached': False,
+            'fault_hop': None,
+            'fault_localized': True,
+            'fault_summary': f"Invalid target IP address: {err_msg}",
+            'hops': [],
+            'raw_output': ""
+        }
+
+    is_windows = platform.system().lower() == "windows"
+    if is_windows:
+        cmd = ["tracert", "-d", "-h", str(max_hops), "-w", str(timeout_ms), target_ip]
+    else:
+        timeout_sec = max(1, int(timeout_ms / 1000))
+        cmd = ["traceroute", "-n", "-m", str(max_hops), "-w", str(timeout_sec), target_ip]
+
+    try:
+        max_duration = min(25, int((max_hops * (timeout_ms / 1000.0) * 1.5) + 5))
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=max_duration,
+            check=False
+        )
+        output = result.stdout or ""
+        return parse_tracert_output(output, target_ip)
+    except subprocess.TimeoutExpired:
+        return {
+            'target_ip': target_ip,
+            'total_hops': 0,
+            'destination_reached': False,
+            'fault_hop': 1,
+            'fault_localized': True,
+            'fault_summary': "Traceroute execution deadline expired before all hops responded.",
+            'hops': [],
+            'raw_output': "Command timed out."
+        }
+    except Exception as e:
+        logger.error(f"Error executing traceroute to {target_ip}: {e}")
+        return {
+            'target_ip': target_ip,
+            'total_hops': 0,
+            'destination_reached': False,
+            'fault_hop': None,
+            'fault_localized': True,
+            'fault_summary': f"Subprocess invocation failure: {str(e)}",
+            'hops': [],
+            'raw_output': str(e)
+        }
+

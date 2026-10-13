@@ -167,5 +167,46 @@ class TestMonitoring(unittest.TestCase):
         self.assertEqual(res['service_status'], 'OPEN')
         self.assertEqual(res['response_time_ms'], 15.5)
 
+    def test_traceroute_parser_success(self):
+        """Test parsing successful multi-hop traceroute to destination."""
+        mock_output = (
+            "Tracing route to 8.8.8.8 over a maximum of 15 hops\n\n"
+            "  1     1 ms     1 ms    <1 ms  192.168.1.1\n"
+            "  2    12 ms    15 ms    10 ms  10.20.0.1\n"
+            "  3    22 ms    21 ms    24 ms  8.8.8.8\n\n"
+            "Trace complete.\n"
+        )
+        res = monitoring.parse_tracert_output(mock_output, "8.8.8.8")
+        self.assertTrue(res['destination_reached'])
+        self.assertFalse(res['fault_localized'])
+        self.assertEqual(res['total_hops'], 3)
+        self.assertEqual(res['hops'][0]['ip'], '192.168.1.1')
+        self.assertEqual(res['hops'][2]['ip'], '8.8.8.8')
+        self.assertEqual(res['hops'][2]['status'], 'SUCCESS')
+
+    def test_traceroute_parser_fault_localization(self):
+        """Test traceroute fault localization when packets drop at intermediate hop."""
+        mock_output = (
+            "Tracing route to 198.51.100.1 over a maximum of 15 hops\n\n"
+            "  1     1 ms     1 ms     1 ms  192.168.1.1\n"
+            "  2     *        *        *     Request timed out.\n"
+            "  3     *        *        *     Request timed out.\n\n"
+            "Trace complete.\n"
+        )
+        res = monitoring.parse_tracert_output(mock_output, "198.51.100.1")
+        self.assertFalse(res['destination_reached'])
+        self.assertTrue(res['fault_localized'])
+        self.assertEqual(res['fault_hop'], 2)
+        self.assertIn("Hop 1 (192.168.1.1)", res['fault_summary'])
+        self.assertIn("Hop 2", res['fault_summary'])
+        self.assertEqual(res['hops'][1]['status'], 'TIMED_OUT')
+
+    def test_traceroute_invalid_ip(self):
+        """Test traceroute with invalid IP returns localized error."""
+        res = monitoring.run_traceroute("invalid.ip.format")
+        self.assertFalse(res['destination_reached'])
+        self.assertTrue(res['fault_localized'])
+        self.assertIn("Invalid target IP", res['fault_summary'])
+
 if __name__ == '__main__':
     unittest.main()
