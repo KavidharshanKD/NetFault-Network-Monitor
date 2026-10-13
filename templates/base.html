@@ -3,79 +3,193 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}Automated Fault Detection System{% endblock %}</title>
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Chart.js local offline bundle -->
+    <script src="{{ url_for('static', filename='js/chart.umd.min.js') }}"></script>
 </head>
 <body>
-    <div class="app-container">
-        <!-- Sidebar Navigation -->
-        <aside class="app-sidebar">
-            <div class="sidebar-header">
-                <div class="sidebar-title">AFDS Network Monitor</div>
-                <div class="sidebar-subtitle">Computer Networks Project</div>
+    <div class="app-layout">
+        <!-- Persistent Left Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                        <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                        <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                        <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-title">Network Monitor</span>
+                    <span class="brand-subtitle">AFDS v{{ app_version }}</span>
+                </div>
             </div>
+
             <nav class="sidebar-nav">
-                <a href="{{ url_for('dashboard') }}" class="nav-item {% if request.path == '/' %}active{% endif %}">
-                    Dashboard
+                <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.path == '/' %}active{% endif %}" id="nav-dashboard">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="9"></rect>
+                        <rect x="14" y="3" width="7" height="5"></rect>
+                        <rect x="14" y="12" width="7" height="9"></rect>
+                        <rect x="3" y="16" width="7" height="5"></rect>
+                    </svg>
+                    <span>Dashboard</span>
                 </a>
-                <a href="{{ url_for('device_list') }}" class="nav-item {% if request.path.startswith('/devices') and request.path != '/devices/add' %}active{% endif %}">
-                    Devices
+
+                <a href="{{ url_for('device_list') }}" class="nav-link {% if request.path.startswith('/devices') %}active{% endif %}" id="nav-devices">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                        <line x1="8" y1="21" x2="16" y2="21"></line>
+                        <line x1="12" y1="17" x2="12" y2="21"></line>
+                    </svg>
+                    <span>Devices</span>
                 </a>
-                <a href="{{ url_for('add_device') }}" class="nav-item {% if request.path == '/devices/add' %}active{% endif %}">
-                    + Add Device
+
+                <a href="{{ url_for('history_view') }}" class="nav-link {% if request.path == '/history' %}active{% endif %}" id="nav-history">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    <span>Monitoring History</span>
                 </a>
-                <a href="{{ url_for('history_view') }}" class="nav-item {% if request.path == '/history' %}active{% endif %}">
-                    Monitoring History
+
+                <a href="{{ url_for('faults_view') }}" class="nav-link {% if request.path == '/faults' %}active{% endif %}" id="nav-faults">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    <span>Fault Reports</span>
                 </a>
-                <a href="{{ url_for('settings_view') }}" class="nav-item {% if request.path == '/settings' %}active{% endif %}">
-                    Settings
+
+                <a href="{{ url_for('settings_view') }}" class="nav-link {% if request.path == '/settings' %}active{% endif %}" id="nav-settings">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                    <span>Settings</span>
+                </a>
+
+                <a href="{{ url_for('system_view') }}" class="nav-link {% if request.path == '/system' %}active{% endif %}" id="nav-system">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                    <span>System Information</span>
                 </a>
             </nav>
+
             <div class="sidebar-footer">
-                <div>Status: Operational</div>
-                <div class="mono" style="margin-top: 4px;">Host: 127.0.0.1:5000</div>
+                <div class="footer-meta">
+                    <span class="meta-label">Scheduler:</span>
+                    <span class="meta-val" id="sidebar-scheduler-status">
+                        {% if scheduler_running %}<span class="badge badge-up">ACTIVE</span>{% else %}<span class="badge badge-neutral">STOPPED</span>{% endif %}
+                    </span>
+                </div>
+                <div class="footer-sub">Localhost Binding: 127.0.0.1</div>
             </div>
         </aside>
 
-        <!-- Main Content Layout -->
-        <main class="app-main">
-            <header class="top-bar">
-                <h1 class="top-bar-title">{% block page_title %}Dashboard{% endblock %}</h1>
-                <div class="top-bar-actions">
-                    {% block top_actions %}{% endblock %}
+        <!-- Main Content Viewport -->
+        <div class="app-main">
+            <!-- Top Navigation Bar -->
+            <header class="top-nav">
+                <div class="top-nav-left">
+                    <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle Navigation">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </button>
+                    <h1 class="page-title">{% block page_title %}Dashboard{% endblock %}</h1>
+                </div>
+
+                <div class="top-nav-right">
+                    <!-- Scheduler Indicator -->
+                    <div class="indicator-item" id="top-scheduler-indicator">
+                        <span class="status-dot {% if scheduler_running %}status-dot-up{% else %}status-dot-down{% endif %}" id="status-dot-worker"></span>
+                        <span class="indicator-text" id="status-text-worker">{% if scheduler_running %}Scheduler Active{% else %}Scheduler Idle{% endif %}</span>
+                    </div>
+
+                    <!-- Last Updated -->
+                    <div class="indicator-item">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted);">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <span class="indicator-label">Updated:</span>
+                        <span class="indicator-text mono" id="top-last-updated">{{ last_cycle_time or 'Just now' }}</span>
+                    </div>
+
+                    <!-- Refresh Action -->
+                    <button class="btn btn-sm btn-outline" id="top-refresh-btn" onclick="location.reload();" title="Refresh Current Page">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"></path>
+                        </svg>
+                        <span>Refresh</span>
+                    </button>
+
+                    <!-- User-Free Local Admin Badge -->
+                    <div class="admin-badge" title="Trusted local administrator interface">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                        <span>Local Admin</span>
+                    </div>
                 </div>
             </header>
 
-            <div class="content-wrapper">
-                <!-- Flash Messages -->
+            <!-- Page Content Body -->
+            <main class="page-body">
+                <!-- Flash Alerts -->
                 {% with messages = get_flashed_messages(with_categories=true) %}
                     {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="alert-box alert-{{ category }}">
-                                <span>{{ message }}</span>
-                            </div>
-                        {% endfor %}
+                        <div class="flash-container">
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }}">
+                                    <span class="alert-text">{{ message }}</span>
+                                    <button class="alert-close" onclick="this.parentElement.remove();">&times;</button>
+                                </div>
+                            {% endfor %}
+                        </div>
                     {% endif %}
                 {% endwith %}
 
-                <!-- Page Body -->
                 {% block content %}{% endblock %}
-            </div>
-        </main>
+            </main>
+        </div>
     </div>
 
-    <!-- Async Status Toast -->
-    <div id="status-toast"></div>
+    <!-- Notification Toast -->
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script>
-        function showToast(message, duration = 3000) {
-            const toast = document.getElementById('status-toast');
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
             if (!toast) return;
             toast.textContent = message;
-            toast.style.display = 'block';
+            toast.className = 'toast show' + (isError ? ' toast-error' : '');
             setTimeout(() => {
-                toast.style.display = 'none';
-            }, duration);
+                toast.className = 'toast';
+            }, 3500);
+        }
+
+        // Mobile drawer toggle
+        const menuBtn = document.getElementById('mobile-menu-btn');
+        const sidebar = document.getElementById('sidebar');
+        if (menuBtn && sidebar) {
+            menuBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('open');
+            });
         }
     </script>
     {% block scripts %}{% endblock %}

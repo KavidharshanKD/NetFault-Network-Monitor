@@ -1,128 +1,194 @@
 {% extends 'base.html' %}
 
-{% block title %}Monitoring History — Automated Fault Detection System{% endblock %}
-{% block page_title %}Monitoring History{% endblock %}
+{% block title %}Monitoring Audit Log — Automated Fault Detection System{% endblock %}
+{% block page_title %}Monitoring History Audit Log{% endblock %}
 
 {% block content %}
-    <div class="card">
-        <!-- Filter Controls -->
-        <form method="GET" action="{{ url_for('history_view') }}" class="filter-bar">
-            <div class="form-group">
-                <label class="form-label" for="device_id">Target Device</label>
-                <select name="device_id" id="device_id" class="form-control" onchange="this.form.submit()">
-                    <option value="">All Registered Devices</option>
-                    {% for dev in devices %}
-                        <option value="{{ dev.id }}" {% if selected_device_id == dev.id %}selected{% endif %}>
-                            {{ dev.device_name }} ({{ dev.ip_address }}{% if dev.port %}:{{ dev.port }}{% endif %})
-                        </option>
-                    {% endfor %}
-                </select>
+<div class="dashboard-hero" style="padding: 16px 24px;">
+    <div class="hero-titles">
+        <h2>Continuous Monitoring Audit Log</h2>
+        <p>Immutable record of all ICMP and TCP connection probes and response latencies.</p>
+    </div>
+    <div class="hero-actions">
+        <a href="{{ url_for('export_history', device_id=selected_device_id or '', status=selected_status or '', date_from=date_from or '', date_to=date_to or '') }}" class="btn btn-outline" id="btn-export-history">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Export CSV</span>
+        </a>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="filter-bar">
+    <form method="GET" action="{{ url_for('history_view') }}" class="filter-group" style="width: 100%; justify-content: space-between;">
+        <div class="filter-group">
+            <select name="device_id" class="filter-input">
+                <option value="">All Registered Devices</option>
+                {% for dev in devices %}
+                    <option value="{{ dev.id }}" {% if selected_device_id == dev.id %}selected{% endif %}>
+                        {{ dev.device_name }} ({{ dev.ip_address }})
+                    </option>
+                {% endfor %}
+            </select>
+
+            <select name="status" class="filter-input">
+                <option value="ALL" {% if selected_status == 'ALL' %}selected{% endif %}>All Operational States</option>
+                <option value="UP" {% if selected_status == 'UP' %}selected{% endif %}>● UP Only</option>
+                <option value="FAULT" {% if selected_status == 'FAULT' %}selected{% endif %}>▲ FAULT Only</option>
+                <option value="DOWN" {% if selected_status == 'DOWN' %}selected{% endif %}>✕ DOWN Only</option>
+            </select>
+
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="text-muted" style="font-size: 11px;">From:</span>
+                <input type="date" name="date_from" value="{{ date_from }}" class="filter-input" style="padding: 5px 8px;">
             </div>
 
-            <div class="form-group">
-                <label class="form-label" for="status">Status Filter</label>
-                <select name="status" id="status" class="form-control" onchange="this.form.submit()">
-                    <option value="ALL" {% if selected_status == 'ALL' %}selected{% endif %}>All Statuses</option>
-                    <option value="UP" {% if selected_status == 'UP' %}selected{% endif %}>UP Only</option>
-                    <option value="DOWN" {% if selected_status == 'DOWN' %}selected{% endif %}>DOWN Only</option>
-                    <option value="FAULT" {% if selected_status == 'FAULT' %}selected{% endif %}>FAULT Only</option>
-                </select>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="text-muted" style="font-size: 11px;">To:</span>
+                <input type="date" name="date_to" value="{{ date_to }}" class="filter-input" style="padding: 5px 8px;">
             </div>
 
-            <div style="display: flex; gap: 8px;">
-                <button type="submit" class="btn btn-sm">Apply Filters</button>
-                <a href="{{ url_for('history_view') }}" class="btn btn-sm">Reset</a>
-            </div>
-        </form>
-
-        <div class="card-header" style="margin-top: 10px;">
-            <span class="card-title">Historical Log Entries ({{ total_records }} Total)</span>
-            <span class="text-muted text-small">Page {{ page }} of {{ total_pages }}</span>
+            <button type="submit" class="btn btn-outline btn-sm">Filter</button>
+            {% if selected_device_id or (selected_status and selected_status != 'ALL') or date_from or date_to %}
+                <a href="{{ url_for('history_view') }}" class="btn btn-sm" style="color: var(--text-muted);">Reset</a>
+            {% endif %}
         </div>
 
-        {% if history|length == 0 %}
-            <div class="empty-state">
-                <div class="empty-state-title">No Historical Records Found</div>
-                <div class="empty-state-desc">
-                    There are no monitoring check records matching the selected filters.
-                    Trigger checks from the Dashboard or enable automated background monitoring.
-                </div>
-            </div>
-        {% else %}
-            <div class="table-container">
-                <table class="data-table">
-                    <thead>
+        <div class="text-muted" style="font-size: 12px;">
+            Total Logged: <strong>{{ total_records }}</strong> audits
+        </div>
+    </form>
+</div>
+
+<!-- History Records Table -->
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Device Name</th>
+                    <th>IP Address</th>
+                    <th>Port</th>
+                    <th>Reachability</th>
+                    <th>Service Status</th>
+                    <th>Overall Status</th>
+                    <th>Response Time</th>
+                    <th>Fault Category</th>
+                    <th>Diagnostic Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if history|length == 0 %}
+                    <tr>
+                        <td colspan="10">
+                            <div class="empty-table-state">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                                <p><strong>No monitoring history records found.</strong></p>
+                                <p style="margin-top: 4px; font-size: 12px;">Run a manual check or start automated monitoring to log records.</p>
+                            </div>
+                        </td>
+                    </tr>
+                {% else %}
+                    {% for h in history %}
                         <tr>
-                            <th>Date & Time</th>
-                            <th>Device Name</th>
-                            <th>IP Address</th>
-                            <th>Port</th>
-                            <th>Status</th>
-                            <th>Response Time</th>
-                            <th>Diagnostic / Fault Details</th>
+                            <td class="mono text-muted" style="font-size: 11px; white-space: nowrap;">
+                                {{ h.checked_at }}
+                            </td>
+                            <td>
+                                <strong><a href="{{ url_for('device_details', device_id=h.device_id) }}" style="color: var(--text-primary); text-decoration: none;">{{ h.device_name }}</a></strong>
+                            </td>
+                            <td><span class="ip-chip">{{ h.ip_address }}</span></td>
+                            <td>
+                                {% if h.port %}<span class="ip-chip">{{ h.port }}</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td>
+                                {% if h.reachability_status == 'REACHABLE' %}
+                                    <span class="badge badge-up">REACHABLE</span>
+                                {% elif h.reachability_status == 'UNREACHABLE' %}
+                                    <span class="badge badge-down">UNREACHABLE</span>
+                                {% elif h.reachability_status == 'ICMP_FILTERED' %}
+                                    <span class="badge badge-fault">FILTERED</span>
+                                {% else %}
+                                    <span class="badge badge-neutral">{{ h.reachability_status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if h.service_status == 'OPEN' %}
+                                    <span class="badge badge-up">OPEN</span>
+                                {% elif h.service_status == 'REFUSED' %}
+                                    <span class="badge badge-fault">REFUSED</span>
+                                {% elif h.service_status == 'TIMEOUT' %}
+                                    <span class="badge badge-fault">TIMEOUT</span>
+                                {% elif h.service_status == 'CLOSED' %}
+                                    <span class="badge badge-down">CLOSED</span>
+                                {% elif h.service_status == 'NOT_CONFIGURED' %}
+                                    <span class="badge badge-neutral">NONE</span>
+                                {% else %}
+                                    <span class="badge badge-neutral">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if h.overall_status == 'UP' %}
+                                    <span class="badge badge-up">● UP</span>
+                                {% elif h.overall_status == 'FAULT' %}
+                                    <span class="badge badge-fault">▲ FAULT</span>
+                                {% elif h.overall_status == 'DOWN' %}
+                                    <span class="badge badge-down">✕ DOWN</span>
+                                {% else %}
+                                    <span class="badge badge-neutral">{{ h.overall_status }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="mono">
+                                {% if h.response_time_ms is not none %}
+                                    {{ h.response_time_ms }} ms
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="mono" style="font-size: 11px;">
+                                {% if h.fault_category and h.fault_category != 'NONE' %}
+                                    <span class="badge badge-fault">{{ h.fault_category }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td style="font-size: 11.5px; color: var(--text-secondary); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ h.fault_details }}">
+                                {{ h.fault_details or '—' }}
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in history %}
-                            <tr>
-                                <td class="mono text-small">{{ row.checked_at }}</td>
-                                <td>
-                                    <strong><a href="{{ url_for('device_details', device_id=row.device_id) }}" style="color: inherit; text-decoration: underline;">{{ row.device_name }}</a></strong>
-                                </td>
-                                <td class="mono">{{ row.ip_address }}</td>
-                                <td class="mono">
-                                    {% if row.port %}{{ row.port }}{% else %}<span class="text-muted">—</span>{% endif %}
-                                </td>
-                                <td>
-                                    {% if row.overall_status == 'UP' %}
-                                        <span class="status-badge status-up">● UP</span>
-                                    {% elif row.overall_status == 'DOWN' %}
-                                        <span class="status-badge status-down">✕ DOWN</span>
-                                    {% elif row.overall_status == 'FAULT' %}
-                                        <span class="status-badge status-fault">▲ FAULT</span>
-                                    {% else %}
-                                        <span class="status-badge status-pending">○ {{ row.overall_status }}</span>
-                                    {% endif %}
-                                </td>
-                                <td class="mono">
-                                    {% if row.response_time_ms is not none %}
-                                        {{ row.response_time_ms }} ms
-                                    {% else %}
-                                        <span class="text-muted">—</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-small">{{ row.fault_details or '—' }}</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Pagination Bar -->
-            {% if total_pages > 1 %}
-                <div class="pagination">
-                    <div class="text-small text-muted">
-                        Showing page {{ page }} of {{ total_pages }}
-                    </div>
-                    <div class="pagination-controls">
-                        {% if page > 1 %}
-                            <a href="{{ url_for('history_view', page=page-1, device_id=selected_device_id or '', status=selected_status) }}" class="btn btn-sm">
-                                &larr; Previous
-                            </a>
-                        {% endif %}
-                        
-                        <span class="btn btn-sm" style="pointer-events: none; background-color: var(--bg-subtle);">
-                            Page {{ page }}
-                        </span>
-
-                        {% if page < total_pages %}
-                            <a href="{{ url_for('history_view', page=page+1, device_id=selected_device_id or '', status=selected_status) }}" class="btn btn-sm">
-                                Next &rarr;
-                            </a>
-                        {% endif %}
-                    </div>
-                </div>
-            {% endif %}
-        {% endif %}
+                    {% endfor %}
+                {% endif %}
+            </tbody>
+        </table>
     </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+        <div class="pagination-container">
+            <span>Showing Page {{ page }} of {{ total_pages }} ({{ total_records }} total entries)</span>
+            <div class="pagination-links">
+                {% if page > 1 %}
+                    <a href="{{ url_for('history_view', page=page-1, device_id=selected_device_id or '', status=selected_status or '', date_from=date_from or '', date_to=date_to or '') }}" class="page-btn">&laquo; Prev</a>
+                {% endif %}
+                {% for p in range(1, total_pages + 1) %}
+                    <a href="{{ url_for('history_view', page=p, device_id=selected_device_id or '', status=selected_status or '', date_from=date_from or '', date_to=date_to or '') }}" class="page-btn {% if p == page %}active{% endif %}">{{ p }}</a>
+                {% endfor %}
+                {% if page < total_pages %}
+                    <a href="{{ url_for('history_view', page=page+1, device_id=selected_device_id or '', status=selected_status or '', date_from=date_from or '', date_to=date_to or '') }}" class="page-btn">Next &raquo;</a>
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/history.js') }}"></script>
 {% endblock %}

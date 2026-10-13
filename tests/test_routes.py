@@ -1,6 +1,6 @@
 """
 Unit tests for Flask routes and JSON API endpoints:
-Views, forms, client/server validations, error handling, and API endpoints.
+Views, forms, client/server validations, fault reports, exports, diagnostics, and error handling.
 """
 
 import os
@@ -14,22 +14,21 @@ class TestRoutes(unittest.TestCase):
     def setUp(self):
         self.temp_db_fd, self.temp_db_path = tempfile.mkstemp(suffix='.db')
         
-        # Patch DATABASE_PATH in Config
         self.app = create_app()
         self.app.config['DATABASE_PATH'] = self.temp_db_path
         self.app.config['TESTING'] = True
+        self.app.config['WTF_CSRF_ENABLED'] = False
         self.client = self.app.test_client()
 
-        # Initialize tables in temp database
         database.init_db(self.temp_db_path)
 
-        # Seed test device
         with patch('scheduler.scheduler.check_single_device'):
             self.test_dev_id = database.create_device(
                 device_name="Test Web Host",
                 ip_address="127.0.0.1",
                 port=5000,
                 description="Local web node",
+                monitoring_enabled=1,
                 db_path=self.temp_db_path
             )
 
@@ -43,7 +42,7 @@ class TestRoutes(unittest.TestCase):
         with patch('database.Config.DATABASE_PATH', self.temp_db_path):
             response = self.client.get('/')
             self.assertEqual(response.status_code, 200)
-            self.assertIn(b"Network Monitoring Dashboard", response.data)
+            self.assertIn(b"AUTOMATED FAULT DETECTION SYSTEM", response.data)
 
     def test_device_inventory_route(self):
         """Device inventory page lists registered device."""
@@ -60,7 +59,8 @@ class TestRoutes(unittest.TestCase):
                     'device_name': 'Router Alpha',
                     'ip_address': '192.168.10.1',
                     'port': '80',
-                    'description': 'Main router'
+                    'description': 'Main router',
+                    'monitoring_enabled': '1'
                 }, follow_redirects=True)
                 self.assertEqual(response.status_code, 200)
                 self.assertIn(b"Router Alpha", response.data)
@@ -82,9 +82,8 @@ class TestRoutes(unittest.TestCase):
         with patch('database.Config.DATABASE_PATH', self.temp_db_path):
             resp = self.client.get(f'/devices/{self.test_dev_id}')
             self.assertEqual(resp.status_code, 200)
-            self.assertIn(b"Current Diagnostic Status", resp.data)
+            self.assertIn(b"Test Web Host", resp.data)
 
-            # Missing device
             resp_missing = self.client.get('/devices/99999', follow_redirects=True)
             self.assertEqual(resp_missing.status_code, 200)
             self.assertIn(b"Device not found", resp_missing.data)
@@ -97,7 +96,8 @@ class TestRoutes(unittest.TestCase):
                     'device_name': 'Renamed Web Host',
                     'ip_address': '127.0.0.1',
                     'port': '8080',
-                    'description': 'Modified'
+                    'description': 'Modified',
+                    'monitoring_enabled': '1'
                 }, follow_redirects=True)
                 self.assertEqual(resp.status_code, 200)
                 self.assertIn(b"Renamed Web Host", resp.data)
@@ -110,12 +110,45 @@ class TestRoutes(unittest.TestCase):
             dev = database.get_device_by_id(self.test_dev_id, db_path=self.temp_db_path)
             self.assertIsNone(dev)
 
-    def test_history_view_filtering(self):
-        """History view filters by status."""
+    def test_toggle_device_monitoring(self):
+        """Toggling device switches enabled status."""
+        with patch('database.Config.DATABASE_PATH', self.temp_db_path):
+            resp = self.client.post(f'/devices/{self.test_dev_id}/toggle', follow_redirects=True)
+            self.assertEqual(resp.status_code, 200)
+            dev = database.get_device_by_id(self.test_dev_id, db_path=self.temp_db_path)
+            self.assertEqual(dev['monitoring_enabled'], 0)
+
+    def test_history_view_and_export(self):
+        """History view filters and exports CSV."""
         with patch('database.Config.DATABASE_PATH', self.temp_db_path):
             resp = self.client.get('/history?status=UP')
             self.assertEqual(resp.status_code, 200)
-            self.assertIn(b"Monitoring History", resp.data)
+            self.assertIn(b"Monitoring History Audit Log", resp.data)
+
+            # CSV Export
+            resp_csv = self.client.get('/history/export')
+            self.assertEqual(resp_csv.status_code, 200)
+            self.assertEqual(resp_csv.mimetype, 'text/csv')
+            self.assertIn(b"Record ID,Timestamp", resp_csv.data)
+
+    def test_faults_view_and_export(self):
+        """Faults view renders and exports CSV."""
+        with patch('database.Config.DATABASE_PATH', self.temp_db_path):
+            resp = self.client.get('/faults')
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn(b"Fault Diagnostics", resp.data)
+
+            resp_csv = self.client.get('/faults/export')
+            self.assertEqual(resp_csv.status_code, 200)
+            self.assertEqual(resp_csv.mimetype, 'text/csv')
+            self.assertIn(b"Device ID,Device Name", resp_csv.data)
+
+    def test_system_view(self):
+        """System information view renders real runtime diagnostics."""
+        with patch('database.Config.DATABASE_PATH', self.temp_db_path):
+            resp = self.client.get('/system')
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn(b"System Architecture", resp.data)
 
     def test_settings_view_and_post(self):
         """Settings page reads and saves configuration."""
@@ -127,7 +160,9 @@ class TestRoutes(unittest.TestCase):
                 'monitor_interval': '45',
                 'ping_timeout': '3',
                 'tcp_timeout': '4',
-                'ping_count': '3'
+                'ping_count': '3',
+                'concurrency_limit': '6',
+                'auto_monitoring': '1'
             }, follow_redirects=True)
             self.assertEqual(resp_post.status_code, 200)
             self.assertIn(b"Monitoring settings updated successfully", resp_post.data)
@@ -135,22 +170,24 @@ class TestRoutes(unittest.TestCase):
     def test_api_endpoints(self):
         """Test JSON API endpoints."""
         with patch('database.Config.DATABASE_PATH', self.temp_db_path):
-            # Summary
             resp = self.client.get('/api/summary')
             self.assertEqual(resp.status_code, 200)
             data = resp.get_json()
             self.assertIn('total_devices', data)
 
-            # Devices JSON
             resp = self.client.get('/api/devices')
             self.assertEqual(resp.status_code, 200)
             devices = resp.get_json()
             self.assertEqual(len(devices), 1)
 
-            # Scheduler status
             resp = self.client.get('/api/scheduler/status')
             self.assertEqual(resp.status_code, 200)
             self.assertIn('running', resp.get_json())
+
+            resp = self.client.get('/api/chart/history')
+            self.assertEqual(resp.status_code, 200)
+            chart_data = resp.get_json()
+            self.assertIn('response_times', chart_data)
 
     def test_404_error_page(self):
         """Accessing undefined route yields 404 template."""

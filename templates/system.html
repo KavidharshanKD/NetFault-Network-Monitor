@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+
+{% block title %}System Information — Automated Fault Detection System{% endblock %}
+{% block page_title %}System Diagnostics & Information{% endblock %}
+
+{% block content %}
+<div class="dashboard-hero" style="padding: 16px 24px;">
+    <div class="hero-titles">
+        <h2>System Architecture & Environment Runtime</h2>
+        <p>Operational health metrics, runtime versions, and internal SQLite database diagnostics.</p>
+    </div>
+</div>
+
+<div class="dashboard-columns" style="grid-template-columns: 1fr 1fr;">
+    <!-- Application & Engine Status -->
+    <div class="card" style="margin-bottom: 0;">
+        <div class="card-header">
+            <span class="card-title">AFDS Core Specification</span>
+        </div>
+        <table class="data-table">
+            <tbody>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted); width: 45%;">Application Name</td>
+                    <td><strong>{{ diag.app_name }}</strong></td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Application Version</td>
+                    <td class="mono">v{{ diag.app_version }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Python Runtime</td>
+                    <td class="mono">Python {{ diag.python_version }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Flask Framework</td>
+                    <td class="mono">Flask {{ diag.flask_version }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Host Operating System</td>
+                    <td class="mono">{{ diag.os_platform }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Application Start Time</td>
+                    <td class="mono">{{ diag.app_start_time }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Server Process Uptime</td>
+                    <td class="mono"><strong>{{ diag.app_uptime }}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Monitoring Scheduler & Storage -->
+    <div class="card" style="margin-bottom: 0;">
+        <div class="card-header">
+            <span class="card-title">Monitoring Engine & Persistence</span>
+        </div>
+        <table class="data-table">
+            <tbody>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted); width: 45%;">Scheduler State</td>
+                    <td>
+                        {% if diag.scheduler_running %}
+                            <span class="badge badge-up">ACTIVE (RUNNING)</span>
+                        {% else %}
+                            <span class="badge badge-neutral">IDLE (STOPPED)</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Configured Interval</td>
+                    <td class="mono">{{ diag.configured_interval }} seconds</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Worker Concurrency Limit</td>
+                    <td class="mono">{{ diag.concurrency_limit }} threads</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Last Completed Cycle</td>
+                    <td class="mono text-muted">{{ diag.scheduler_last_cycle }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">SQLite Engine Version</td>
+                    <td class="mono">SQLite {{ diag.sqlite_version }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Database Path</td>
+                    <td class="mono text-muted" style="font-size: 11px; word-break: break-all;">
+                        {{ diag.database_path }}
+                    </td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Database Storage Size</td>
+                    <td class="mono">{{ diag.database_size_kb }} KB</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Registered Targets</td>
+                    <td class="mono"><strong>{{ diag.total_devices }}</strong> devices</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Total Historical Audits</td>
+                    <td class="mono"><strong>{{ diag.total_history_records }}</strong> audits recorded</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

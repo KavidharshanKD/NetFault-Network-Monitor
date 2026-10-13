@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+
+{% block title %}Fault Diagnostics & Reports — Automated Fault Detection System{% endblock %}
+{% block page_title %}Fault Diagnostics & Reports{% endblock %}
+
+{% block content %}
+<div class="dashboard-hero" style="padding: 16px 24px;">
+    <div class="hero-titles">
+        <h2>Network Incident & Fault Diagnostics</h2>
+        <p>Granular classification of Layer 3/4 network reachability failures and refused socket connections.</p>
+    </div>
+    <div class="hero-actions">
+        <a href="{{ url_for('export_faults', device_id=selected_device_id or '', category=selected_category or '', status=selected_status or '') }}" class="btn btn-outline" id="btn-export-faults">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Export Faults CSV</span>
+        </a>
+    </div>
+</div>
+
+<!-- Filters Bar -->
+<div class="filter-bar">
+    <form method="GET" action="{{ url_for('faults_view') }}" class="filter-group" style="width: 100%; justify-content: space-between;">
+        <div class="filter-group">
+            <select name="device_id" class="filter-input">
+                <option value="">All Monitored Devices</option>
+                {% for dev in devices %}
+                    <option value="{{ dev.id }}" {% if selected_device_id == dev.id %}selected{% endif %}>
+                        {{ dev.device_name }} ({{ dev.ip_address }})
+                    </option>
+                {% endfor %}
+            </select>
+
+            <select name="category" class="filter-input">
+                <option value="ALL" {% if selected_category == 'ALL' %}selected{% endif %}>All Fault Categories</option>
+                <option value="SERVICE_REFUSED" {% if selected_category == 'SERVICE_REFUSED' %}selected{% endif %}>SERVICE_REFUSED (Port Closed)</option>
+                <option value="SERVICE_TIMEOUT" {% if selected_category == 'SERVICE_TIMEOUT' %}selected{% endif %}>SERVICE_TIMEOUT (TCP Handshake Timeout)</option>
+                <option value="HOST_UNREACHABLE" {% if selected_category == 'HOST_UNREACHABLE' %}selected{% endif %}>HOST_UNREACHABLE (ICMP Drop)</option>
+                <option value="NETWORK_TIMEOUT" {% if selected_category == 'NETWORK_TIMEOUT' %}selected{% endif %}>NETWORK_TIMEOUT (Ping Timeout)</option>
+                <option value="FIREWALL_FILTERED" {% if selected_category == 'FIREWALL_FILTERED' %}selected{% endif %}>FIREWALL_FILTERED (ICMP Blocked)</option>
+                <option value="SOCKET_ERROR" {% if selected_category == 'SOCKET_ERROR' %}selected{% endif %}>SOCKET_ERROR (System Error)</option>
+            </select>
+
+            <select name="status" class="filter-input">
+                <option value="ALL" {% if selected_status == 'ALL' %}selected{% endif %}>All Incident States</option>
+                <option value="FAULT" {% if selected_status == 'FAULT' %}selected{% endif %}>▲ FAULT (Degraded)</option>
+                <option value="DOWN" {% if selected_status == 'DOWN' %}selected{% endif %}>✕ DOWN (Unreachable)</option>
+            </select>
+
+            <button type="submit" class="btn btn-outline btn-sm">Apply Filter</button>
+            {% if selected_device_id or (selected_category and selected_category != 'ALL') or (selected_status and selected_status != 'ALL') %}
+                <a href="{{ url_for('faults_view') }}" class="btn btn-sm" style="color: var(--text-muted);">Reset</a>
+            {% endif %}
+        </div>
+
+        <div class="text-muted" style="font-size: 12px;">
+            Active Incidents: <strong>{{ reports|length }}</strong>
+        </div>
+    </form>
+</div>
+
+<!-- Fault Reports Table -->
+<div class="card">
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Device</th>
+                    <th>IP Address</th>
+                    <th>Port</th>
+                    <th>Fault Category</th>
+                    <th>Status</th>
+                    <th>Consecutive Fails</th>
+                    <th>First Observed</th>
+                    <th>Last Observed</th>
+                    <th>Latest Latency</th>
+                    <th>Diagnostic Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if reports|length == 0 %}
+                    <tr>
+                        <td colspan="10">
+                            <div class="empty-table-state">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                </svg>
+                                <p><strong>No network faults or outages currently recorded.</strong></p>
+                                <p style="margin-top: 4px; font-size: 12px;">All reachable monitored targets are operating normally.</p>
+                            </div>
+                        </td>
+                    </tr>
+                {% else %}
+                    {% for r in reports %}
+                        <tr>
+                            <td>
+                                <strong><a href="{{ url_for('device_details', device_id=r.device_id) }}" style="color: var(--text-primary); text-decoration: none;">{{ r.device_name }}</a></strong>
+                            </td>
+                            <td><span class="ip-chip">{{ r.ip_address }}</span></td>
+                            <td>
+                                {% if r.port %}<span class="ip-chip">{{ r.port }}</span>{% else %}<span class="text-muted">—</span>{% endif %}
+                            </td>
+                            <td class="mono" style="font-size: 11px;">
+                                {% if r.fault_category %}
+                                    <span class="badge badge-fault">{{ r.fault_category }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if r.fault_status == 'FAULT' %}
+                                    <span class="badge badge-fault">▲ FAULT</span>
+                                {% else %}
+                                    <span class="badge badge-down">✕ DOWN</span>
+                                {% endif %}
+                            </td>
+                            <td class="mono" style="text-align: center;">
+                                <span class="badge badge-neutral" style="font-weight: 700;">{{ r.consecutive_failures }}x</span>
+                            </td>
+                            <td class="mono text-muted" style="font-size: 11px;">
+                                {{ r.first_observed or '—' }}
+                            </td>
+                            <td class="mono text-muted" style="font-size: 11px;">
+                                {{ r.last_observed or '—' }}
+                            </td>
+                            <td class="mono">
+                                {% if r.response_time_ms is not none %}
+                                    {{ r.response_time_ms }} ms
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td style="font-size: 12px; color: var(--text-secondary); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ r.fault_details }}">
+                                {{ r.fault_details or '—' }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

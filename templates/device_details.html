@@ -1,177 +1,321 @@
 {% extends 'base.html' %}
 
-{% block title %}Device Details: {{ device.device_name }} — Automated Fault Detection System{% endblock %}
+{% block title %}Device Diagnostics: {{ device.device_name }} — Automated Fault Detection System{% endblock %}
 {% block page_title %}{{ device.device_name }}{% endblock %}
 
-{% block top_actions %}
-    <button class="btn btn-primary btn-sm" onclick="triggerDeviceCheck({{ device.id }})" id="details-check-btn">
-        Check Now
-    </button>
-    <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-sm">
-        Edit Device
-    </a>
-    <a href="{{ url_for('device_list') }}" class="btn btn-sm">
-        Back to Inventory
-    </a>
-{% endblock %}
-
 {% block content %}
-    <!-- Device Operational Status Card -->
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Current Diagnostic Status</span>
-            <div>
-                {% if device.overall_status == 'UP' %}
-                    <span class="status-badge status-up" style="font-size: 13px; padding: 4px 12px;">● UP</span>
-                {% elif device.overall_status == 'DOWN' %}
-                    <span class="status-badge status-down" style="font-size: 13px; padding: 4px 12px;">✕ DOWN</span>
-                {% elif device.overall_status == 'FAULT' %}
-                    <span class="status-badge status-fault" style="font-size: 13px; padding: 4px 12px;">▲ FAULT</span>
-                {% else %}
-                    <span class="status-badge status-pending" style="font-size: 13px; padding: 4px 12px;">○ UNCHECKED</span>
-                {% endif %}
-            </div>
-        </div>
+<div class="dashboard-hero" style="padding: 16px 24px;">
+    <div class="hero-titles">
+        <h2>{{ device.device_name }}</h2>
+        <p class="mono text-muted">{{ device.ip_address }}{% if device.port %}:{{ device.port }}{% endif %} &bull; Registered {{ device.created_at }}</p>
+    </div>
+    <div class="hero-actions">
+        <button class="btn btn-primary" onclick="triggerDeviceCheck({{ device.id }})" id="details-check-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            <span>Check Now</span>
+        </button>
+        <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-outline">
+            Edit Device
+        </a>
+        <a href="{{ url_for('device_list') }}" class="btn btn-outline">
+            &larr; Inventory
+        </a>
+    </div>
+</div>
 
-        <div class="detail-grid">
-            <div class="detail-item">
-                <div class="detail-label">IP Address</div>
-                <div class="detail-value mono">{{ device.ip_address }}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">Configured TCP Port</div>
-                <div class="detail-value mono">
-                    {% if device.port %}{{ device.port }}{% else %}<span class="text-muted">None (Ping Only)</span>{% endif %}
-                </div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">ICMP Reachability</div>
-                <div class="detail-value mono">{{ device.reachability_status or 'UNCHECKED' }}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">TCP Service State</div>
-                <div class="detail-value mono">{{ device.service_status or 'NOT_CHECKED' }}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">Measured Response Time</div>
-                <div class="detail-value mono">
-                    {% if device.response_time_ms is not none %}
-                        {{ device.response_time_ms }} ms
-                    {% else %}
-                        <span class="text-muted">—</span>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">Last Checked Timestamp</div>
-                <div class="detail-value mono text-small">{{ device.last_checked or 'Never' }}</div>
-            </div>
-        </div>
-
-        <div style="margin-top: 16px; padding: 12px 16px; border: 1px solid var(--border-subtle); background-color: var(--bg-subtle);">
-            <div class="detail-label">Diagnostic & Fault Details</div>
-            <div style="font-size: 13px; margin-top: 4px;">
-                {% if device.fault_details %}
-                    {{ device.fault_details }}
-                {% else %}
-                    <span class="text-muted">No faults or diagnostics recorded. Device is awaiting check or operating nominally.</span>
-                {% endif %}
-            </div>
-            {% if device.description %}
-                <div style="margin-top: 10px; font-size: 12px; color: var(--text-muted);">
-                    <strong>Description:</strong> {{ device.description }}
-                </div>
+<!-- Diagnostics Grid -->
+<div class="summary-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 20px;">
+    <div class="metric-card">
+        <div class="metric-label">Overall Status</div>
+        <div style="margin-top: 8px;">
+            {% if device.overall_status == 'UP' %}
+                <span class="badge badge-up" style="font-size: 14px; padding: 4px 10px;">● UP</span>
+            {% elif device.overall_status == 'FAULT' %}
+                <span class="badge badge-fault" style="font-size: 14px; padding: 4px 10px;">▲ FAULT</span>
+            {% elif device.overall_status == 'DOWN' %}
+                <span class="badge badge-down" style="font-size: 14px; padding: 4px 10px;">✕ DOWN</span>
+            {% else %}
+                <span class="badge badge-neutral" style="font-size: 14px; padding: 4px 10px;">○ UNCHECKED</span>
             {% endif %}
         </div>
+        <div class="metric-unit" style="margin-top: 8px;">Operational health</div>
     </div>
 
-    <!-- Recent History Records Card -->
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Recent Monitoring History</span>
-            <span class="text-muted text-small">Last {{ history|length }} checks</span>
+    <div class="metric-card">
+        <div class="metric-label">ICMP Reachability</div>
+        <div class="metric-val" style="font-size: 18px; margin-top: 8px;">
+            {{ device.reachability_status or 'UNCHECKED' }}
         </div>
-
-        {% if history|length == 0 %}
-            <div class="empty-state">
-                <div class="empty-state-title">No History Logged Yet</div>
-                <div class="empty-state-desc">
-                    Click "Check Now" above to run an on-demand ICMP and TCP diagnostic check on this host.
-                </div>
-            </div>
-        {% else %}
-            <div class="table-container">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Checked At</th>
-                            <th>Overall Status</th>
-                            <th>ICMP Reachability</th>
-                            <th>TCP Service</th>
-                            <th>Response Time</th>
-                            <th>Diagnostic / Fault Reason</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for record in history %}
-                            <tr>
-                                <td class="mono text-small">{{ record.checked_at }}</td>
-                                <td>
-                                    {% if record.overall_status == 'UP' %}
-                                        <span class="status-badge status-up">● UP</span>
-                                    {% elif record.overall_status == 'DOWN' %}
-                                        <span class="status-badge status-down">✕ DOWN</span>
-                                    {% elif record.overall_status == 'FAULT' %}
-                                        <span class="status-badge status-fault">▲ FAULT</span>
-                                    {% else %}
-                                        <span class="status-badge status-pending">○ {{ record.overall_status }}</span>
-                                    {% endif %}
-                                </td>
-                                <td class="mono text-small">{{ record.reachability_status }}</td>
-                                <td class="mono text-small">{{ record.service_status }}</td>
-                                <td class="mono">
-                                    {% if record.response_time_ms is not none %}
-                                        {{ record.response_time_ms }} ms
-                                    {% else %}
-                                        <span class="text-muted">—</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-small">{{ record.fault_details or '—' }}</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% endif %}
+        <div class="metric-unit">Layer 3 ping response</div>
     </div>
+
+    <div class="metric-card">
+        <div class="metric-label">TCP Service State</div>
+        <div class="metric-val" style="font-size: 18px; margin-top: 8px;">
+            {{ device.service_status or 'NOT_CHECKED' }}
+        </div>
+        <div class="metric-unit">Port: {{ device.port or 'None' }}</div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-label">Response Time</div>
+        <div class="metric-val" style="font-size: 20px; margin-top: 8px;">
+            {% if device.response_time_ms is not none %}
+                {{ device.response_time_ms }}<span style="font-size: 14px; font-weight: normal;"> ms</span>
+            {% else %}
+                —
+            {% endif %}
+        </div>
+        <div class="metric-unit">Round-trip latency</div>
+    </div>
+</div>
+
+<!-- Details & Diagnostic Info -->
+<div class="dashboard-columns">
+    <!-- Configuration Details Card -->
+    <div class="card" style="margin-bottom: 0;">
+        <div class="card-header">
+            <span class="card-title">Endpoint Configuration</span>
+        </div>
+        <table class="data-table">
+            <tbody>
+                <tr>
+                    <td style="width: 35%; font-weight: 600; color: var(--text-muted);">Device Name</td>
+                    <td><strong>{{ device.device_name }}</strong></td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">IP Address</td>
+                    <td class="mono">{{ device.ip_address }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Monitored TCP Port</td>
+                    <td class="mono">
+                        {% if device.port %}{{ device.port }}{% else %}<span class="text-muted">None (ICMP Ping Only)</span>{% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Description</td>
+                    <td>{{ device.description or '—' }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Periodic Monitoring</td>
+                    <td>
+                        {% if device.monitoring_enabled == 1 %}
+                            <span class="badge badge-up">ENABLED</span>
+                        {% else %}
+                            <span class="badge badge-neutral">PAUSED</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Last Inspection</td>
+                    <td class="mono">{{ device.last_checked or 'Never' }}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Latest Diagnostic</td>
+                    <td style="font-size: 12px;">{{ device.fault_details or 'No diagnostic data recorded.' }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Device Response Time Chart -->
+    <div class="chart-card">
+        <div class="card-header">
+            <span class="card-title">Latency History (ms)</span>
+        </div>
+        <div class="chart-canvas-container">
+            <canvas id="deviceChart"></canvas>
+            <div id="device-no-chart" class="chart-empty" style="display: none;">
+                No monitoring data available yet.
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Monitoring History Table -->
+<div class="card" style="margin-top: 20px;">
+    <div class="card-header">
+        <span class="card-title">Recent Monitoring Audit Records (Last {{ history|length }})</span>
+        <a href="{{ url_for('history_view', device_id=device.id) }}" class="btn btn-sm btn-outline">Full History Audit</a>
+    </div>
+
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Reachability</th>
+                    <th>Service Status</th>
+                    <th>Overall Status</th>
+                    <th>Response Time</th>
+                    <th>Fault Category</th>
+                    <th>Diagnostic Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if history|length == 0 %}
+                    <tr>
+                        <td colspan="7">
+                            <div class="empty-table-state">
+                                <p><strong>No monitoring history recorded for this device yet.</strong></p>
+                                <p style="margin-top: 4px; font-size: 12px;">Click "Check Now" to execute an immediate probe.</p>
+                            </div>
+                        </td>
+                    </tr>
+                {% else %}
+                    {% for h in history %}
+                        <tr>
+                            <td class="mono text-muted" style="font-size: 12px;">{{ h.checked_at }}</td>
+                            <td>
+                                {% if h.reachability_status == 'REACHABLE' %}
+                                    <span class="badge badge-up">REACHABLE</span>
+                                {% elif h.reachability_status == 'UNREACHABLE' %}
+                                    <span class="badge badge-down">UNREACHABLE</span>
+                                {% elif h.reachability_status == 'ICMP_FILTERED' %}
+                                    <span class="badge badge-fault">FILTERED</span>
+                                {% else %}
+                                    <span class="badge badge-neutral">{{ h.reachability_status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if h.service_status == 'OPEN' %}
+                                    <span class="badge badge-up">OPEN</span>
+                                {% elif h.service_status == 'REFUSED' %}
+                                    <span class="badge badge-fault">REFUSED</span>
+                                {% elif h.service_status == 'TIMEOUT' %}
+                                    <span class="badge badge-fault">TIMEOUT</span>
+                                {% elif h.service_status == 'CLOSED' %}
+                                    <span class="badge badge-down">CLOSED</span>
+                                {% elif h.service_status == 'NOT_CONFIGURED' %}
+                                    <span class="badge badge-neutral">NONE</span>
+                                {% else %}
+                                    <span class="badge badge-neutral">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if h.overall_status == 'UP' %}
+                                    <span class="badge badge-up">● UP</span>
+                                {% elif h.overall_status == 'FAULT' %}
+                                    <span class="badge badge-fault">▲ FAULT</span>
+                                {% elif h.overall_status == 'DOWN' %}
+                                    <span class="badge badge-down">✕ DOWN</span>
+                                {% else %}
+                                    <span class="badge badge-neutral">{{ h.overall_status }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="mono">
+                                {% if h.response_time_ms is not none %}
+                                    {{ h.response_time_ms }} ms
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="mono" style="font-size: 11px;">
+                                {% if h.fault_category and h.fault_category != 'NONE' %}
+                                    <span class="badge badge-fault">{{ h.fault_category }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td style="font-size: 12px; color: var(--text-secondary);">
+                                {{ h.fault_details or '—' }}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    async function triggerDeviceCheck(deviceId) {
-        const btn = document.getElementById('details-check-btn');
-        if (!btn) return;
-        btn.disabled = true;
-        btn.textContent = 'Checking...';
+function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+}
 
-        try {
-            const resp = await fetch(`/api/devices/${deviceId}/check`, { method: 'POST' });
-            const data = await resp.json();
-            if (data.success) {
-                showToast("Check completed successfully. Refreshing details...");
-                setTimeout(() => {
-                    window.location.reload();
-                }, 800);
-            } else {
-                showToast("Check failed: " + (data.error || "Unknown error"));
-                btn.disabled = false;
-                btn.textContent = 'Check Now';
+async function triggerDeviceCheck(deviceId) {
+    const btn = document.getElementById('details-check-btn');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Checking...";
+    }
+
+    try {
+        const response = await fetch(`/api/devices/${deviceId}/check`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
             }
-        } catch (e) {
-            showToast("Network error: " + e.message);
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast(`Probe completed: ${data.result.overall_status}`);
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            showToast(data.error || "Check failed", true);
+        }
+    } catch (e) {
+        console.error(e);
+        showToast("Error executing check", true);
+    } finally {
+        if (btn) {
             btn.disabled = false;
-            btn.textContent = 'Check Now';
+            btn.textContent = "Check Now";
         }
     }
+}
+
+// Chart.js initialization for device details
+document.addEventListener('DOMContentLoaded', () => {
+    const labels = {{ timeseries.labels|tojson }};
+    const responseTimes = {{ timeseries.response_times|tojson }};
+    const canvas = document.getElementById('deviceChart');
+    const emptyMsg = document.getElementById('device-no-chart');
+
+    const validValues = responseTimes.filter(v => v !== null && v !== undefined);
+    if (!validValues || validValues.length === 0) {
+        if (canvas) canvas.style.display = 'none';
+        if (emptyMsg) emptyMsg.style.display = 'flex';
+        return;
+    }
+
+    if (canvas) {
+        new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Latency (ms)',
+                    data: responseTimes,
+                    borderColor: '#0f172a',
+                    backgroundColor: 'rgba(15, 23, 42, 0.05)',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#0f172a',
+                    pointRadius: 4,
+                    fill: true,
+                    tension: 0.2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { font: { size: 10, family: 'JetBrains Mono, monospace' } } },
+                    y: { beginAtZero: true, ticks: { font: { size: 10, family: 'JetBrains Mono, monospace' } } }
+                }
+            }
+        });
+    }
+});
 </script>
 {% endblock %}

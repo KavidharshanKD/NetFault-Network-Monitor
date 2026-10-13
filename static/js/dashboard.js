@@ -1,266 +1,353 @@
 /**
- * Automated Fault Detection System
- * Dashboard Frontend Interactivity & Live Monitoring Controller
+ * Automated Fault Detection System - Dashboard JavaScript Module
+ * Handles asynchronous triggers, background polling, and real-time Chart.js rendering.
  */
 
-let isSchedulerRunning = false;
-let pollingIntervalId = null;
+let trendChartInstance = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-    // Check initial scheduler status
-    fetchSchedulerStatus();
-
-    // Start passive UI polling every 10 seconds to sync background check results
-    pollingIntervalId = setInterval(passiveSyncDashboard, 10000);
-});
-
-async function fetchSchedulerStatus() {
-    try {
-        const resp = await fetch('/api/scheduler/status');
-        if (!resp.ok) return;
-        const data = await resp.json();
-        isSchedulerRunning = data.running;
-        updateSchedulerUI(data.running, data.last_cycle);
-    } catch (e) {
-        console.error("Failed to fetch scheduler status:", e);
-    }
+function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
 }
 
-function updateSchedulerUI(running, lastCycle) {
-    const btn = document.getElementById('toggle-scheduler-btn');
-    const indicator = document.getElementById('scheduler-indicator');
-    const lastCycleEl = document.getElementById('last-updated-time');
+// ---------------------------------------------------------
+// Chart.js Trend Visualizer
+// ---------------------------------------------------------
 
-    if (btn) {
-        if (running) {
-            btn.textContent = '■ Stop Monitoring';
-            btn.classList.add('btn-primary');
-        } else {
-            btn.textContent = '▶ Start Monitoring';
-            btn.classList.remove('btn-primary');
+async function loadTrendChart() {
+    try {
+        const response = await fetch('/api/chart/history');
+        if (!response.ok) return;
+        const data = await response.json();
+
+        const canvas = document.getElementById('trendChart');
+        const emptyMsg = document.getElementById('chart-no-data');
+
+        if (!canvas) return;
+
+        // Check if sufficient actual data exists
+        const validValues = (data.response_times || []).filter(v => v !== null && v !== undefined);
+        if (!validValues || validValues.length === 0) {
+            canvas.style.display = 'none';
+            if (emptyMsg) emptyMsg.style.display = 'flex';
+            return;
         }
-    }
 
-    if (indicator) {
-        indicator.innerHTML = `Background Monitoring: <strong>${running ? 'ACTIVE (Auto-cycles enabled)' : 'STOPPED'}</strong>`;
-    }
+        canvas.style.display = 'block';
+        if (emptyMsg) emptyMsg.style.display = 'none';
 
-    if (lastCycleEl && lastCycle) {
-        lastCycleEl.textContent = `Last cycle: ${lastCycle}`;
-    }
-}
+        if (trendChartInstance) {
+            trendChartInstance.destroy();
+        }
 
-async function toggleScheduler() {
-    const btn = document.getElementById('toggle-scheduler-btn');
-    if (!btn) return;
+        const ctx = canvas.getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+        gradient.addColorStop(0, 'rgba(37, 99, 235, 0.16)');
+        gradient.addColorStop(1, 'rgba(37, 99, 235, 0.00)');
 
-    btn.disabled = true;
-    const endpoint = isSchedulerRunning ? '/api/scheduler/stop' : '/api/scheduler/start';
-
-    try {
-        const resp = await fetch(endpoint, { method: 'POST' });
-        const data = await resp.json();
-        isSchedulerRunning = data.running;
-        updateSchedulerUI(data.running);
-        showToast(data.message || (data.running ? 'Periodic monitoring started' : 'Periodic monitoring stopped'));
+        trendChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.labels || [],
+                datasets: [{
+                    label: 'Latency (ms)',
+                    data: data.response_times || [],
+                    borderColor: '#2563eb',
+                    backgroundColor: gradient,
+                    borderWidth: 2.5,
+                    pointBackgroundColor: '#2563eb',
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#0f172a',
+                        titleFont: { size: 11, family: 'Inter, sans-serif' },
+                        bodyFont: { size: 12, family: 'JetBrains Mono, monospace' },
+                        padding: 10,
+                        cornerRadius: 8,
+                        callbacks: {
+                            label: function(context) {
+                                return ` Latency: ${context.parsed.y} ms`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 10, family: 'JetBrains Mono, monospace' }, color: '#64748b' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: '#f1f5f9' },
+                        ticks: { font: { size: 10, family: 'JetBrains Mono, monospace' }, color: '#64748b' }
+                    }
+                }
+            }
+        });
     } catch (e) {
-        showToast("Error updating scheduler state: " + e.message);
-    } finally {
-        btn.disabled = false;
+        console.error("Error loading trend chart:", e);
     }
 }
+
+// ---------------------------------------------------------
+// Device Checks & Status Operations
+// ---------------------------------------------------------
 
 async function checkSingleDevice(deviceId) {
     const btn = document.getElementById(`check-btn-${deviceId}`);
-    const originalText = btn ? btn.textContent : '';
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Testing...';
+        btn.textContent = "Checking...";
     }
 
     try {
-        const resp = await fetch(`/api/devices/${deviceId}/check`, { method: 'POST' });
-        const data = await resp.json();
-        if (data.success) {
-            showToast(`Check complete for device #${deviceId}: ${data.result ? data.result.overall_status : 'Done'}`);
-            await refreshDashboard();
+        const response = await fetch(`/api/devices/${deviceId}/check`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
+
+        const data = await response.json();
+        if (data.success && data.device) {
+            updateDeviceRow(data.device);
+            await refreshSummaryStats();
+            await loadTrendChart();
+            showToast(`Probe completed for ${data.device.device_name}: ${data.device.overall_status}`);
         } else {
-            showToast(`Error: ${data.error || 'Failed to check device'}`);
+            showToast(data.error || "Check failed", true);
         }
-    } catch (e) {
-        showToast("Network error checking device: " + e.message);
+    } catch (error) {
+        console.error("Probe error:", error);
+        showToast("Network error executing probe", true);
     } finally {
         if (btn) {
             btn.disabled = false;
-            btn.textContent = originalText;
+            btn.textContent = "Check Now";
         }
     }
 }
 
 async function checkAllDevices() {
-    const btn = document.getElementById('check-all-btn');
-    if (!btn) return;
-
-    btn.disabled = true;
-    const originalText = btn.textContent;
-    btn.textContent = 'Checking All...';
-
-    try {
-        const resp = await fetch('/api/check-all', { method: 'POST' });
-        const data = await resp.json();
-        if (data.success) {
-            showToast(`Checked ${data.checked_count} device(s) successfully.`);
-            updateSummaryData(data.summary);
-            renderDeviceRows(data.devices);
-        } else {
-            showToast('Failed to check all devices.');
-        }
-    } catch (e) {
-        showToast("Network error executing check: " + e.message);
-    } finally {
-        btn.disabled = false;
-        btn.textContent = originalText;
-    }
-}
-
-async function refreshDashboard() {
-    const btn = document.getElementById('refresh-dashboard-btn');
+    const btn = document.getElementById('btn-check-all');
     if (btn) {
         btn.disabled = true;
-        btn.textContent = 'Refreshing...';
+        btn.textContent = "Checking All...";
     }
 
     try {
-        await passiveSyncDashboard();
-        showToast("Dashboard data refreshed.");
+        const response = await fetch('/api/check-all', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            if (data.devices) {
+                data.devices.forEach(dev => updateDeviceRow(dev));
+            }
+            if (data.summary) {
+                applySummaryData(data.summary);
+            }
+            await loadTrendChart();
+            const timeElem = document.getElementById('last-updated-time');
+            if (timeElem) {
+                const now = new Date().toLocaleTimeString();
+                timeElem.textContent = `Last check cycle: ${now}`;
+            }
+            showToast(`Audit cycle finished: checked ${data.checked_count} devices.`);
+        }
+    } catch (error) {
+        console.error("Batch check error:", error);
+        showToast("Error checking all devices", true);
     } finally {
         if (btn) {
             btn.disabled = false;
-            btn.textContent = 'Refresh';
+            btn.textContent = "Check All";
         }
     }
 }
 
-async function passiveSyncDashboard() {
+async function toggleScheduler() {
+    const btn = document.getElementById('btn-toggle-scheduler');
+    const btnText = document.getElementById('scheduler-btn-text');
+
     try {
-        const [sumResp, devResp, schedResp] = await Promise.all([
-            fetch('/api/summary'),
-            fetch('/api/devices'),
-            fetch('/api/scheduler/status')
-        ]);
+        const statusResp = await fetch('/api/scheduler/status');
+        const statusData = await statusResp.json();
+        const endpoint = statusData.running ? '/api/scheduler/stop' : '/api/scheduler/start';
 
-        if (sumResp.ok) {
-            const sumData = await sumResp.json();
-            updateSummaryData(sumData);
-        }
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
 
-        if (devResp.ok) {
-            const devData = await devResp.json();
-            renderDeviceRows(devData);
+        const data = await response.json();
+        if (data.success) {
+            updateSchedulerUI(data.running);
+            showToast(data.message);
         }
-
-        if (schedResp.ok) {
-            const schedData = await schedResp.json();
-            isSchedulerRunning = schedData.running;
-            updateSchedulerUI(schedData.running, schedData.last_cycle);
-        }
-    } catch (e) {
-        console.warn("Passive sync warning:", e);
+    } catch (error) {
+        console.error("Scheduler toggle error:", error);
+        showToast("Error updating scheduler state", true);
     }
 }
 
-function updateSummaryData(sum) {
-    if (!sum) return;
+function updateSchedulerUI(isRunning) {
+    const btnText = document.getElementById('scheduler-btn-text');
+    if (btnText) {
+        btnText.textContent = isRunning ? "■ Stop Monitoring" : "▶ Start Monitoring";
+    }
+
+    const dot = document.getElementById('status-dot-worker');
+    const text = document.getElementById('status-text-worker');
+    if (dot && text) {
+        if (isRunning) {
+            dot.className = "status-dot status-dot-up";
+            text.textContent = "Scheduler Active";
+        } else {
+            dot.className = "status-dot status-dot-down";
+            text.textContent = "Scheduler Idle";
+        }
+    }
+
+    const sideStatus = document.getElementById('sidebar-scheduler-status');
+    if (sideStatus) {
+        sideStatus.innerHTML = isRunning 
+            ? '<span class="badge badge-up">ACTIVE</span>' 
+            : '<span class="badge badge-neutral">STOPPED</span>';
+    }
+}
+
+function updateDeviceRow(device) {
+    const row = document.getElementById(`device-row-${device.id}`);
+    if (!row) return;
+
+    // Reachability Badge
+    let reachBadge = '<span class="badge badge-neutral">—</span>';
+    if (device.reachability_status === 'REACHABLE') {
+        reachBadge = '<span class="badge badge-up">REACHABLE</span>';
+    } else if (device.reachability_status === 'UNREACHABLE') {
+        reachBadge = '<span class="badge badge-down">UNREACHABLE</span>';
+    } else if (device.reachability_status === 'ICMP_FILTERED') {
+        reachBadge = '<span class="badge badge-fault">FILTERED</span>';
+    }
+
+    // Service Badge
+    let servBadge = '<span class="badge badge-neutral">—</span>';
+    if (device.service_status === 'OPEN') {
+        servBadge = '<span class="badge badge-up">OPEN</span>';
+    } else if (device.service_status === 'REFUSED') {
+        servBadge = '<span class="badge badge-fault">REFUSED</span>';
+    } else if (device.service_status === 'TIMEOUT') {
+        servBadge = '<span class="badge badge-fault">TIMEOUT</span>';
+    } else if (device.service_status === 'CLOSED') {
+        servBadge = '<span class="badge badge-down">CLOSED</span>';
+    } else if (device.service_status === 'NOT_CONFIGURED') {
+        servBadge = '<span class="badge badge-neutral">NONE</span>';
+    }
+
+    // Overall Status Badge
+    let overallBadge = '<span class="badge badge-neutral">○ UNCHECKED</span>';
+    if (device.overall_status === 'UP') {
+        overallBadge = '<span class="badge badge-up">● UP</span>';
+    } else if (device.overall_status === 'FAULT') {
+        overallBadge = '<span class="badge badge-fault">▲ FAULT</span>';
+    } else if (device.overall_status === 'DOWN') {
+        overallBadge = '<span class="badge badge-down">✕ DOWN</span>';
+    }
+
+    const latencyText = device.response_time_ms !== null && device.response_time_ms !== undefined 
+        ? `${device.response_time_ms} ms` 
+        : '<span class="text-muted">—</span>';
+
+    const lastChecked = device.last_checked || 'Just now';
+
+    row.cells[3].innerHTML = reachBadge;
+    row.cells[4].innerHTML = servBadge;
+    row.cells[5].innerHTML = overallBadge;
+    row.cells[6].innerHTML = latencyText;
+    row.cells[7].textContent = lastChecked;
+}
+
+function applySummaryData(summary) {
     const elTotal = document.getElementById('stat-total');
     const elUp = document.getElementById('stat-up');
     const elDown = document.getElementById('stat-down');
     const elFault = document.getElementById('stat-fault');
     const elAvg = document.getElementById('stat-avg');
 
-    if (elTotal) elTotal.textContent = sum.total_devices;
-    if (elUp) elUp.textContent = sum.up_count;
-    if (elDown) elDown.textContent = sum.down_count;
-    if (elFault) elFault.textContent = sum.fault_count;
+    if (elTotal) elTotal.textContent = summary.total_devices;
+    if (elUp) elUp.textContent = summary.up_count;
+    if (elDown) elDown.textContent = summary.down_count;
+    if (elFault) elFault.textContent = summary.fault_count;
     if (elAvg) {
-        elAvg.innerHTML = sum.avg_response_time_ms !== null 
-            ? `${sum.avg_response_time_ms}<span style="font-size: 16px;"> ms</span>` 
+        elAvg.innerHTML = summary.avg_response_time_ms !== null 
+            ? `${summary.avg_response_time_ms}<span style="font-size: 14px; font-weight: normal;"> ms</span>` 
             : '—';
     }
 }
 
-function renderDeviceRows(devices) {
-    const tbody = document.getElementById('devices-tbody');
-    if (!tbody || !devices) return;
-
-    if (devices.length === 0) {
-        // Leave empty state handled by template
-        return;
-    }
-
-    tbody.innerHTML = '';
-    devices.forEach(dev => {
-        const tr = document.createElement('tr');
-        tr.id = `device-row-${dev.id}`;
-
-        let statusBadgeHtml = '';
-        if (dev.overall_status === 'UP') {
-            statusBadgeHtml = '<span class="status-badge status-up">● UP</span>';
-        } else if (dev.overall_status === 'DOWN') {
-            statusBadgeHtml = '<span class="status-badge status-down">✕ DOWN</span>';
-        } else if (dev.overall_status === 'FAULT') {
-            statusBadgeHtml = '<span class="status-badge status-fault">▲ FAULT</span>';
-        } else {
-            statusBadgeHtml = '<span class="status-badge status-pending">○ UNCHECKED</span>';
+async function refreshSummaryStats() {
+    try {
+        const response = await fetch('/api/summary');
+        if (response.ok) {
+            const summary = await response.json();
+            applySummaryData(summary);
         }
-
-        const portDisplay = dev.port ? dev.port : '<span class="text-muted">—</span>';
-        const respTimeDisplay = dev.response_time_ms !== null && dev.response_time_ms !== undefined
-            ? `${dev.response_time_ms} ms`
-            : '<span class="text-muted">—</span>';
-        const lastCheckedDisplay = dev.last_checked ? dev.last_checked : 'Never';
-        const faultDisplay = dev.fault_details ? dev.fault_details : '<span class="text-muted">—</span>';
-        const descDisplay = dev.description ? `<div class="text-small text-muted">${escapeHtml(dev.description)}</div>` : '';
-
-        tr.innerHTML = `
-            <td>
-                <strong><a href="/devices/${dev.id}" style="color: inherit; text-decoration: underline;">${escapeHtml(dev.device_name)}</a></strong>
-                ${descDisplay}
-            </td>
-            <td class="mono">${escapeHtml(dev.ip_address)}</td>
-            <td class="mono">${portDisplay}</td>
-            <td>${statusBadgeHtml}</td>
-            <td class="mono">${respTimeDisplay}</td>
-            <td class="text-small text-muted mono">${lastCheckedDisplay}</td>
-            <td class="text-small">${escapeHtml(faultDisplay)}</td>
-            <td style="text-align: right;">
-                <div class="action-group" style="justify-content: flex-end;">
-                    <button class="btn btn-sm" onclick="checkSingleDevice(${dev.id})" id="check-btn-${dev.id}">
-                        Check Now
-                    </button>
-                    <a href="/devices/${dev.id}" class="btn btn-sm">
-                        Details
-                    </a>
-                    <a href="/devices/${dev.id}/edit" class="btn btn-sm">
-                        Edit
-                    </a>
-                    <form method="POST" action="/devices/${dev.id}/delete" style="display: inline;" onsubmit="return confirm('Are you sure you want to permanently delete device ${escapeHtml(dev.device_name)} and its history?');">
-                        <button type="submit" class="btn btn-sm btn-danger">
-                            Delete
-                        </button>
-                    </form>
-                </div>
-            </td>
-        `;
-        tbody.appendChild(tr);
-    });
+    } catch (e) {
+        console.error("Error fetching summary stats:", e);
+    }
 }
 
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+async function refreshDashboard() {
+    await refreshSummaryStats();
+    try {
+        const devResp = await fetch('/api/devices');
+        if (devResp.ok) {
+            const devices = await devResp.json();
+            devices.forEach(dev => updateDeviceRow(dev));
+        }
+    } catch (e) {
+        console.error("Error refreshing devices:", e);
+    }
+    await loadTrendChart();
+    showToast("Dashboard metrics refreshed");
 }
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadTrendChart();
+    // Periodic UI sync every 15 seconds
+    setInterval(async () => {
+        try {
+            const statResp = await fetch('/api/scheduler/status');
+            if (statResp.ok) {
+                const stat = await statResp.json();
+                updateSchedulerUI(stat.running);
+                if (stat.last_cycle) {
+                    const topUpdated = document.getElementById('top-last-updated');
+                    if (topUpdated) topUpdated.textContent = stat.last_cycle;
+                }
+            }
+        } catch (e) {}
+    }, 15000);
+});

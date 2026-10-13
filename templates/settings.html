@@ -1,99 +1,136 @@
 {% extends 'base.html' %}
 
 {% block title %}System Settings — Automated Fault Detection System{% endblock %}
-{% block page_title %}System Settings{% endblock %}
+{% block page_title %}Monitoring Engine Settings{% endblock %}
 
 {% block content %}
-    <div class="card" style="max-width: 650px;">
-        <div class="card-header">
-            <span class="card-title">Network Monitoring Parameters</span>
+<div class="form-card">
+    <div class="card-header">
+        <span class="card-title">Runtime Monitoring Parameters</span>
+    </div>
+
+    <form method="POST" action="{{ url_for('settings_view') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-group">
+            <label class="form-label" for="monitor_interval">
+                Periodic Cycle Frequency (seconds) <span class="req">*</span>
+            </label>
+            <input 
+                type="number" 
+                id="monitor_interval" 
+                name="monitor_interval" 
+                class="form-input mono" 
+                min="5" 
+                max="3600" 
+                value="{{ settings.monitor_interval }}" 
+                required
+            >
+            <div class="form-hint">
+                Time delay between automated background sweeps across enabled targets (Range: 5 to 3600s). Default: 30s.
+            </div>
         </div>
 
-        <form method="POST" action="{{ url_for('settings_view') }}">
-            <div class="form-group">
-                <label class="form-label" for="monitor_interval">
-                    Monitoring Cycle Interval (seconds) <span class="required">*</span>
-                </label>
-                <input 
-                    type="number" 
-                    id="monitor_interval" 
-                    name="monitor_interval" 
-                    class="form-control mono" 
-                    min="5" 
-                    max="3600" 
-                    value="{{ settings.monitor_interval }}" 
-                    required
-                >
-                <div class="form-help">
-                    Time between automated background cycles. Minimum: 5s, Maximum: 3600s. Default: 30s.
-                </div>
+        <div class="form-group">
+            <label class="form-label" for="ping_timeout">
+                ICMP Ping Timeout (seconds) <span class="req">*</span>
+            </label>
+            <input 
+                type="number" 
+                id="ping_timeout" 
+                name="ping_timeout" 
+                class="form-input mono" 
+                min="1" 
+                max="30" 
+                value="{{ settings.ping_timeout }}" 
+                required
+            >
+            <div class="form-hint">
+                Maximum duration allowed for an ICMP echo reply before reporting a request timeout. Default: 2s.
             </div>
+        </div>
 
-            <div class="form-group">
-                <label class="form-label" for="ping_timeout">
-                    ICMP Ping Timeout (seconds) <span class="required">*</span>
-                </label>
-                <input 
-                    type="number" 
-                    id="ping_timeout" 
-                    name="ping_timeout" 
-                    class="form-control mono" 
-                    min="1" 
-                    max="30" 
-                    value="{{ settings.ping_timeout }}" 
-                    required
-                >
-                <div class="form-help">
-                    Maximum wait time per ping echo packet before assuming timeout. Default: 2s.
-                </div>
+        <div class="form-group">
+            <label class="form-label" for="ping_count">
+                ICMP Ping Attempts per Check <span class="req">*</span>
+            </label>
+            <input 
+                type="number" 
+                id="ping_count" 
+                name="ping_count" 
+                class="form-input mono" 
+                min="1" 
+                max="10" 
+                value="{{ settings.ping_count }}" 
+                required
+            >
+            <div class="form-hint">
+                Number of echo probe packets transmitted per device reachability verification (Range: 1 to 10). Default: 1.
             </div>
+        </div>
 
-            <div class="form-group">
-                <label class="form-label" for="tcp_timeout">
-                    TCP Socket Connection Timeout (seconds) <span class="required">*</span>
-                </label>
-                <input 
-                    type="number" 
-                    id="tcp_timeout" 
-                    name="tcp_timeout" 
-                    class="form-control mono" 
-                    min="1" 
-                    max="30" 
-                    value="{{ settings.tcp_timeout }}" 
-                    required
-                >
-                <div class="form-help">
-                    Maximum time permitted for TCP 3-way handshake completion. Default: 3s.
-                </div>
+        <div class="form-group">
+            <label class="form-label" for="tcp_timeout">
+                TCP Socket Connection Timeout (seconds) <span class="req">*</span>
+            </label>
+            <input 
+                type="number" 
+                id="tcp_timeout" 
+                name="tcp_timeout" 
+                class="form-input mono" 
+                min="1" 
+                max="30" 
+                value="{{ settings.tcp_timeout }}" 
+                required
+            >
+            <div class="form-hint">
+                Maximum deadline for completing the TCP 3-way handshake on the specified port. Default: 2s.
             </div>
+        </div>
 
-            <div class="form-group">
-                <label class="form-label" for="ping_count">
-                    Number of Ping Packets per Check <span class="required">*</span>
-                </label>
-                <input 
-                    type="number" 
-                    id="ping_count" 
-                    name="ping_count" 
-                    class="form-control mono" 
-                    min="1" 
-                    max="10" 
-                    value="{{ settings.ping_count }}" 
-                    required
-                >
-                <div class="form-help">
-                    Number of ICMP Echo requests transmitted during reachability verification (1 to 10). Default: 2.
-                </div>
+        <div class="form-group">
+            <label class="form-label" for="concurrency_limit">
+                Worker Thread Concurrency Limit <span class="req">*</span>
+            </label>
+            <input 
+                type="number" 
+                id="concurrency_limit" 
+                name="concurrency_limit" 
+                class="form-input mono" 
+                min="1" 
+                max="20" 
+                value="{{ settings.concurrency_limit }}" 
+                required
+            >
+            <div class="form-hint">
+                Maximum simultaneous worker threads executing probes in parallel (Range: 1 to 20). Default: 5.
             </div>
+        </div>
 
-            <div style="display: flex; gap: 10px; margin-top: 24px;">
-                <button type="submit" class="btn btn-primary">
-                    Save Changes
-                </button>
-                <a href="{{ url_for('dashboard') }}" class="btn">
-                    Back to Dashboard
-                </a>
+        <div class="form-group">
+            <label class="form-check" for="auto_monitoring">
+                <input 
+                    type="checkbox" 
+                    id="auto_monitoring" 
+                    name="auto_monitoring" 
+                    value="1" 
+                    {% if settings.auto_monitoring == 1 %}checked{% endif %}
+                >
+                <span>Automated Background Auditing Active</span>
+            </label>
+            <div class="form-hint" style="margin-left: 24px;">
+                When active, the background scheduler automatically audits enabled endpoints at the configured frequency.
             </div>
-        </form>
-    </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                Save & Persist Settings
+            </button>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-outline">
+                Back to Dashboard
+            </a>
+        </div>
+    </form>
+</div>
 {% endblock %}

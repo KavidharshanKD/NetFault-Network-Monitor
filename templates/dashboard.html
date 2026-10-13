@@ -1,167 +1,345 @@
 {% extends 'base.html' %}
 
 {% block title %}Dashboard — Automated Fault Detection System{% endblock %}
-{% block page_title %}Network Monitoring Dashboard{% endblock %}
-
-{% block top_actions %}
-    <div style="display: flex; gap: 8px; align-items: center;">
-        <!-- Periodic Scheduler Controls -->
-        <button id="toggle-scheduler-btn" class="btn btn-sm {% if scheduler_running %}btn-primary{% endif %}" onclick="toggleScheduler()">
-            {% if scheduler_running %}■ Stop Monitoring{% else %}▶ Start Monitoring{% endif %}
-        </button>
-        <button id="check-all-btn" class="btn btn-sm" onclick="checkAllDevices()">
-            Check All Devices
-        </button>
-        <button id="refresh-dashboard-btn" class="btn btn-sm" onclick="refreshDashboard()">
-            Refresh
-        </button>
-        <a href="{{ url_for('add_device') }}" class="btn btn-sm btn-primary">
-            + Add Device
-        </a>
-    </div>
-{% endblock %}
+{% block page_title %}Network Operations Dashboard{% endblock %}
 
 {% block content %}
-    <!-- Summary Metrics Grid -->
-    <div class="summary-grid">
-        <div class="summary-card">
-            <div class="summary-label">Total Devices</div>
-            <div class="summary-value" id="stat-total">{{ summary.total_devices }}</div>
-            <div class="summary-meta">Registered targets</div>
-        </div>
-        <div class="summary-card">
-            <div class="summary-label">Devices UP</div>
-            <div class="summary-value" id="stat-up">{{ summary.up_count }}</div>
-            <div class="summary-meta">Fully operational</div>
-        </div>
-        <div class="summary-card">
-            <div class="summary-label">Devices DOWN</div>
-            <div class="summary-value" id="stat-down">{{ summary.down_count }}</div>
-            <div class="summary-meta">Unreachable / Offline</div>
-        </div>
-        <div class="summary-card">
-            <div class="summary-label">Devices with FAULT</div>
-            <div class="summary-value" id="stat-fault">{{ summary.fault_count }}</div>
-            <div class="summary-meta">Service unavailable</div>
-        </div>
-        <div class="summary-card">
-            <div class="summary-label">Avg Response Time</div>
-            <div class="summary-value" id="stat-avg">
-                {% if summary.avg_response_time_ms is not none %}
-                    {{ summary.avg_response_time_ms }}<span style="font-size: 16px;"> ms</span>
-                {% else %}
-                    —
-                {% endif %}
+<!-- Top Header Hero & Prominent Action Area -->
+<div class="dashboard-hero">
+    <div class="hero-titles">
+        <h2>AUTOMATED FAULT DETECTION SYSTEM</h2>
+        <p>Centralized network monitoring, service availability, and fault diagnostics.</p>
+    </div>
+    <div class="hero-actions">
+        <a href="{{ url_for('add_device') }}" class="btn btn-primary" id="btn-add-device">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>Add Device</span>
+        </a>
+        <button class="btn btn-outline" id="btn-check-all" onclick="checkAllDevices()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            <span>Check All</span>
+        </button>
+        <button class="btn btn-outline" id="btn-toggle-scheduler" onclick="toggleScheduler()">
+            <span id="scheduler-btn-text">{% if scheduler_running %}■ Stop Monitoring{% else %}▶ Start Monitoring{% endif %}</span>
+        </button>
+        <button class="btn btn-outline" id="btn-refresh" onclick="refreshDashboard()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.19"></path>
+            </svg>
+            <span>Refresh</span>
+        </button>
+    </div>
+</div>
+
+<!-- 5 Summary Metric Cards -->
+<div class="summary-grid">
+    <div class="metric-card">
+        <div class="metric-header">
+            <span class="metric-label">Total Devices</span>
+            <div style="width: 36px; height: 36px; border-radius: 10px; background: #eff6ff; border: 1px solid #bfdbfe; display: flex; align-items: center; justify-content: center; color: #2563eb;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="2" width="20" height="8" rx="2"></rect>
+                    <rect x="2" y="14" width="20" height="8" rx="2"></rect>
+                    <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                    <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                </svg>
             </div>
-            <div class="summary-meta">Active targets only</div>
+        </div>
+        <div class="metric-val" id="stat-total">{{ summary.total_devices }}</div>
+        <div class="metric-unit">
+            <span class="badge badge-neutral" style="font-size: 10px; padding: 1px 6px;">CONFIGURED</span>
+            <span>Registered endpoints</span>
         </div>
     </div>
 
-    <!-- Monitoring Table Card -->
-    <div class="card">
-        <div class="card-header">
-            <div>
-                <span class="card-title">Live Device Status</span>
-                <span class="text-muted text-small" style="margin-left: 12px;" id="scheduler-indicator">
-                    Background Monitoring: 
-                    <strong>{% if scheduler_running %}ACTIVE (Auto-cycles enabled){% else %}STOPPED{% endif %}</strong>
-                </span>
-            </div>
-            <div class="text-muted text-small mono" id="last-updated-time">
-                {% if last_cycle %}Last cycle: {{ last_cycle }}{% endif %}
+    <div class="metric-card">
+        <div class="metric-header">
+            <span class="metric-label">UP</span>
+            <div style="width: 36px; height: 36px; border-radius: 10px; background: #ecfdf5; border: 1px solid #a7f3d0; display: flex; align-items: center; justify-content: center; color: #059669;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
             </div>
         </div>
+        <div class="metric-val" id="stat-up" style="color: #059669;">{{ summary.up_count }}</div>
+        <div class="metric-unit">
+            <span class="badge badge-up" style="font-size: 10px; padding: 1px 6px;">NOMINAL</span>
+            <span>Operational services</span>
+        </div>
+    </div>
 
-        {% if devices|length == 0 %}
-            <div class="empty-state">
-                <div class="empty-state-title">No Network Devices Registered</div>
-                <div class="empty-state-desc">
-                    There are currently no network targets configured for automated monitoring.
-                    Register your first localhost, local server, router, or remote host to begin fault detection.
+    <div class="metric-card">
+        <div class="metric-header">
+            <span class="metric-label">DOWN</span>
+            <div style="width: 36px; height: 36px; border-radius: 10px; background: #fef2f2; border: 1px solid #fecaca; display: flex; align-items: center; justify-content: center; color: #dc2626;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="15" y1="9" x2="9" y2="15"></line>
+                    <line x1="9" y1="9" x2="15" y2="15"></line>
+                </svg>
+            </div>
+        </div>
+        <div class="metric-val" id="stat-down" style="color: #dc2626;">{{ summary.down_count }}</div>
+        <div class="metric-unit">
+            {% if summary.down_count > 0 %}
+                <span class="badge badge-down" style="font-size: 10px; padding: 1px 6px;">OUTAGE</span>
+            {% else %}
+                <span class="badge badge-neutral" style="font-size: 10px; padding: 1px 6px;">CLEAR</span>
+            {% endif %}
+            <span>Unreachable / Offline</span>
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-header">
+            <span class="metric-label">FAULT</span>
+            <div style="width: 36px; height: 36px; border-radius: 10px; background: #fffbeb; border: 1px solid #fde68a; display: flex; align-items: center; justify-content: center; color: #d97706;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+            </div>
+        </div>
+        <div class="metric-val" id="stat-fault" style="color: #d97706;">{{ summary.fault_count }}</div>
+        <div class="metric-unit">
+            {% if summary.fault_count > 0 %}
+                <span class="badge badge-fault" style="font-size: 10px; padding: 1px 6px;">DEGRADED</span>
+            {% else %}
+                <span class="badge badge-neutral" style="font-size: 10px; padding: 1px 6px;">HEALTHY</span>
+            {% endif %}
+            <span>Port refused / timeout</span>
+        </div>
+    </div>
+
+    <div class="metric-card">
+        <div class="metric-header">
+            <span class="metric-label">Avg Latency</span>
+            <div style="width: 36px; height: 36px; border-radius: 10px; background: #f5f3ff; border: 1px solid #ddd6fe; display: flex; align-items: center; justify-content: center; color: #7c3aed;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+            </div>
+        </div>
+        <div class="metric-val" id="stat-avg" style="color: #7c3aed;">
+            {% if summary.avg_response_time_ms is not none %}
+                {{ summary.avg_response_time_ms }}<span style="font-size: 14px; font-weight: normal; color: var(--text-muted);"> ms</span>
+            {% else %}
+                —
+            {% endif %}
+        </div>
+        <div class="metric-unit">
+            <span class="badge badge-neutral" style="font-size: 10px; padding: 1px 6px;">ICMP/TCP</span>
+            <span>Active checks only</span>
+        </div>
+    </div>
+</div>
+
+<!-- Trend Visualizations & Recent Faults Grid -->
+<div class="dashboard-columns">
+    <!-- Response Time Trend Chart -->
+    <div class="chart-card">
+        <div class="card-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="card-title">Response Time Trend (ms)</span>
+                <span class="status-dot status-dot-up" title="Real-time timeline"></span>
+            </div>
+            <span class="text-muted" style="font-size: 11px;">Recent check audit timeline</span>
+        </div>
+        <div class="chart-canvas-container" id="chart-container">
+            <canvas id="trendChart"></canvas>
+            <div id="chart-no-data" class="chart-empty" style="display: none;">
+                No monitoring data available yet.
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Fault Activity Card -->
+    <div class="card" style="margin-bottom: 0;">
+        <div class="card-header">
+            <span class="card-title">Recent Fault Activity</span>
+            <a href="{{ url_for('faults_view') }}" class="btn btn-sm btn-outline">View All</a>
+        </div>
+        {% if recent_faults|length == 0 %}
+            <div class="empty-fault-state">
+                <div class="empty-fault-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
                 </div>
-                <a href="{{ url_for('add_device') }}" class="btn btn-primary">+ Add First Device</a>
+                <div class="empty-fault-title">All Systems Nominal</div>
+                <div class="empty-fault-subtitle">No active network faults detected.</div>
             </div>
         {% else %}
-            <div class="table-container">
-                <table class="data-table" id="devices-table">
-                    <thead>
-                        <tr>
-                            <th>Device Name</th>
-                            <th>IP Address</th>
-                            <th>TCP Port</th>
-                            <th>Current Status</th>
-                            <th>Response Time</th>
-                            <th>Last Checked</th>
-                            <th>Fault Details</th>
-                            <th style="text-align: right;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="devices-tbody">
-                        {% for dev in devices %}
-                            <tr id="device-row-{{ dev.id }}">
-                                <td>
-                                    <strong><a href="{{ url_for('device_details', device_id=dev.id) }}" style="color: inherit; text-decoration: underline;">{{ dev.device_name }}</a></strong>
-                                    {% if dev.description %}
-                                        <div class="text-small text-muted">{{ dev.description }}</div>
-                                    {% endif %}
-                                </td>
-                                <td class="mono">{{ dev.ip_address }}</td>
-                                <td class="mono">
-                                    {% if dev.port %}{{ dev.port }}{% else %}<span class="text-muted">—</span>{% endif %}
-                                </td>
-                                <td>
-                                    {% if dev.overall_status == 'UP' %}
-                                        <span class="status-badge status-up">● UP</span>
-                                    {% elif dev.overall_status == 'DOWN' %}
-                                        <span class="status-badge status-down">✕ DOWN</span>
-                                    {% elif dev.overall_status == 'FAULT' %}
-                                        <span class="status-badge status-fault">▲ FAULT</span>
-                                    {% else %}
-                                        <span class="status-badge status-pending">○ UNCHECKED</span>
-                                    {% endif %}
-                                </td>
-                                <td class="mono">
-                                    {% if dev.response_time_ms is not none %}
-                                        {{ dev.response_time_ms }} ms
-                                    {% else %}
-                                        <span class="text-muted">—</span>
-                                    {% endif %}
-                                </td>
-                                <td class="text-small text-muted mono">
-                                    {{ dev.last_checked or 'Never' }}
-                                </td>
-                                <td class="text-small">
-                                    {% if dev.fault_details %}
-                                        {{ dev.fault_details }}
-                                    {% else %}
-                                        <span class="text-muted">—</span>
-                                    {% endif %}
-                                </td>
-                                <td style="text-align: right;">
-                                    <div class="action-group" style="justify-content: flex-end;">
-                                        <button class="btn btn-sm" onclick="checkSingleDevice({{ dev.id }})" id="check-btn-{{ dev.id }}">
-                                            Check Now
-                                        </button>
-                                        <a href="{{ url_for('device_details', device_id=dev.id) }}" class="btn btn-sm">
-                                            Details
-                                        </a>
-                                        <a href="{{ url_for('edit_device', device_id=dev.id) }}" class="btn btn-sm">
-                                            Edit
-                                        </a>
-                                        <form method="POST" action="{{ url_for('delete_device', device_id=dev.id) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to permanently delete device {{ dev.device_name }} and its history?');">
-                                            <button type="submit" class="btn btn-sm btn-danger">
-                                                Delete
-                                            </button>
-                                        </form>
-                                    </div>
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                {% for f in recent_faults %}
+                    <div style="padding: 10px; border: 1px solid var(--border-light); border-radius: var(--radius-sm); background: var(--surface-subtle);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <strong style="font-size: 13px;">{{ f.device_name }}</strong>
+                            {% if f.overall_status == 'FAULT' %}
+                                <span class="badge badge-fault">▲ FAULT</span>
+                            {% else %}
+                                <span class="badge badge-down">✕ DOWN</span>
+                            {% endif %}
+                        </div>
+                        <div class="mono text-muted" style="font-size: 11px;">
+                            <span class="ip-chip">{{ f.ip_address }}{% if f.port %}:{{ f.port }}{% endif %}</span> &bull; {{ f.checked_at.split(' ')[-1] if ' ' in f.checked_at else f.checked_at }}
+                        </div>
+                        <div style="font-size: 11px; margin-top: 4px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ f.fault_details }}">
+                            {{ f.fault_details }}
+                        </div>
+                    </div>
+                {% endfor %}
             </div>
         {% endif %}
     </div>
+</div>
+
+<!-- Main Device Monitoring Table Card -->
+<div class="card">
+    <div class="card-header">
+        <div>
+            <span class="card-title">Registered Device Monitoring Status</span>
+            <span class="text-muted" style="font-size: 12px; margin-left: 10px;" id="table-subtitle">
+                Total Devices: {{ devices|length }}
+            </span>
+        </div>
+        <div class="text-muted mono" style="font-size: 12px;" id="last-updated-time">
+            {% if last_cycle %}Last cycle: {{ last_cycle }}{% endif %}
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="data-table" id="device-table">
+            <thead>
+                <tr>
+                    <th>Device Name</th>
+                    <th>IP Address</th>
+                    <th>Port</th>
+                    <th>Reachability</th>
+                    <th>Service Status</th>
+                    <th>Overall Status</th>
+                    <th>Response Time</th>
+                    <th>Last Checked</th>
+                    <th style="text-align: right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="device-table-body">
+                {% if devices|length == 0 %}
+                    <tr>
+                        <td colspan="9">
+                            <div class="empty-table-state">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <rect x="2" y="2" width="20" height="8" rx="2"></rect>
+                                    <rect x="2" y="14" width="20" height="8" rx="2"></rect>
+                                    <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                                    <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                                </svg>
+                                <p><strong>No network devices registered yet.</strong></p>
+                                <p style="margin-top: 4px; font-size: 12px;">Click "Add Device" above to configure your first monitoring target.</p>
+                            </div>
+                        </td>
+                    </tr>
+                {% else %}
+                    {% for d in devices %}
+                        <tr id="device-row-{{ d.id }}">
+                            <td>
+                                <a href="{{ url_for('device_details', device_id=d.id) }}" style="color: var(--text-primary); font-weight: 600; text-decoration: none;">
+                                    {{ d.device_name }}
+                                </a>
+                                {% if d.monitoring_enabled == 0 %}
+                                    <span class="badge badge-neutral" style="font-size: 9px; margin-left: 4px;">PAUSED</span>
+                                {% endif %}
+                            </td>
+                            <td><span class="ip-chip">{{ d.ip_address }}</span></td>
+                            <td>
+                                {% if d.port %}
+                                    <span class="ip-chip">{{ d.port }}</span>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if d.reachability_status == 'REACHABLE' %}
+                                    <span class="badge badge-up">REACHABLE</span>
+                                {% elif d.reachability_status == 'UNREACHABLE' %}
+                                    <span class="badge badge-down">UNREACHABLE</span>
+                                {% elif d.reachability_status == 'ICMP_FILTERED' %}
+                                    <span class="badge badge-fault">FILTERED</span>
+                                {% else %}
+                                    <span class="badge badge-neutral">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if d.service_status == 'OPEN' %}
+                                    <span class="badge badge-up">OPEN</span>
+                                {% elif d.service_status == 'REFUSED' %}
+                                    <span class="badge badge-fault">REFUSED</span>
+                                {% elif d.service_status == 'TIMEOUT' %}
+                                    <span class="badge badge-fault">TIMEOUT</span>
+                                {% elif d.service_status == 'CLOSED' %}
+                                    <span class="badge badge-down">CLOSED</span>
+                                {% elif d.service_status == 'NOT_CONFIGURED' %}
+                                    <span class="badge badge-neutral">NONE</span>
+                                {% else %}
+                                    <span class="badge badge-neutral">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if d.overall_status == 'UP' %}
+                                    <span class="badge badge-up">● UP</span>
+                                {% elif d.overall_status == 'FAULT' %}
+                                    <span class="badge badge-fault">▲ FAULT</span>
+                                {% elif d.overall_status == 'DOWN' %}
+                                    <span class="badge badge-down">✕ DOWN</span>
+                                {% else %}
+                                    <span class="badge badge-neutral">○ UNCHECKED</span>
+                                {% endif %}
+                            </td>
+                            <td class="mono">
+                                {% if d.response_time_ms is not none %}
+                                    {{ d.response_time_ms }} ms
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="mono text-muted" style="font-size: 11px;">
+                                {{ d.last_checked or 'Never' }}
+                            </td>
+                            <td style="text-align: right;">
+                                <div class="table-actions">
+                                    <a href="{{ url_for('device_details', device_id=d.id) }}" class="btn btn-sm btn-outline" title="View Diagnostics">
+                                        View
+                                    </a>
+                                    <button class="btn btn-sm btn-outline" onclick="checkSingleDevice({{ d.id }})" id="check-btn-{{ d.id }}" title="Run immediate probe">
+                                        Check Now
+                                    </button>
+                                    <a href="{{ url_for('edit_device', device_id=d.id) }}" class="btn btn-sm btn-outline" title="Edit Parameters">
+                                        Edit
+                                    </a>
+                                    <form action="{{ url_for('delete_device', device_id=d.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to permanently delete \'{{ d.device_name }}\' and its monitoring history?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-danger" title="Delete Device">
+                                            Delete
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
