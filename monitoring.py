@@ -139,19 +139,34 @@ def parse_ping_output(stdout, stderr="", returncode=0, count=1, elapsed_total_ms
                 rcvd = int(rcvd_m.group(1))
                 lost = int(lost_m.group(1)) if lost_m else max(0, sent - rcvd)
 
-        # 2. Calculate actual packet loss percentage: ((packets_sent - packets_received) / packets_sent) * 100
-        if sent is not None and sent > 0 and rcvd is not None:
-            lost = max(0, sent - rcvd) if lost is None else lost
-            loss_pct = round(((float(sent) - float(rcvd)) / float(sent)) * 100.0, 2)
-        elif sent is not None and sent > 0 and lost is not None:
-            loss_pct = round((float(lost) / float(sent)) * 100.0, 2)
-            rcvd = max(0, sent - lost)
-        elif "100% loss" in stdout or "100% de perte" in stdout or "100% Verlust" in stdout:
-            if sent is None:
+        # 2. Calculate actual packet loss percentage: (packets_lost / packets_sent) * 100
+        if sent is not None and sent > 0:
+            if lost is None and rcvd is not None:
+                lost = max(0, sent - rcvd)
+            elif lost is not None and rcvd is None:
+                rcvd = max(0, sent - lost)
+
+            # 0 successful replies: 100% loss only when all probes were actually executed and confirmed unanswered
+            if rcvd == 0:
+                if sent >= count:
+                    lost = sent
+                    loss_pct = 100.0
+                else:
+                    loss_pct = None
+                    parse_error = "Incomplete probe execution: 0 replies received before probe sequence completed."
+            elif lost is not None:
+                loss_pct = round((float(lost) / float(sent)) * 100.0, 2)
+            elif rcvd is not None:
+                loss_pct = round(((float(sent) - float(rcvd)) / float(sent)) * 100.0, 2)
+        elif ("100% loss" in stdout or "100% de perte" in stdout or "100% Verlust" in stdout) and ("Sent = " in stdout or "Packets: Sent" in stdout):
+            if sent is not None and sent >= count:
                 sent = count
                 rcvd = 0
                 lost = count
-            loss_pct = 100.0
+                loss_pct = 100.0
+            else:
+                loss_pct = None
+                parse_error = "Incomplete probe execution: probe statistics incomplete."
 
         # 3. Parse Round-Trip Times (Min, Max, Avg)
         # Minimum = 24ms, Maximum = 28ms, Average = 25ms
@@ -221,7 +236,16 @@ def parse_ping_output(stdout, stderr="", returncode=0, count=1, elapsed_total_ms
             sent = int(linux_pkt.group(1))
             rcvd = int(linux_pkt.group(2))
             lost = max(0, sent - rcvd)
-            loss_pct = round(((float(sent) - float(rcvd)) / float(sent)) * 100.0, 2) if sent > 0 else 0.0
+            if sent > 0:
+                if rcvd == 0:
+                    if sent >= count:
+                        lost = sent
+                        loss_pct = 100.0
+                    else:
+                        loss_pct = None
+                        parse_error = "Incomplete probe execution: 0 replies received before probe sequence completed."
+                else:
+                    loss_pct = round((float(lost) / float(sent)) * 100.0, 2)
 
         rtt_match = re.search(
             r"(?:rtt|round-trip)\s+min/avg/max/(?:mdev|stddev)\s*=\s*([0-9\.]+)/([0-9\.]+)/([0-9\.]+)",
@@ -512,11 +536,11 @@ def check_device_connectivity(device, settings=None):
     ping_timeout = settings.get('ping_timeout', Config.DEFAULT_PING_TIMEOUT)
     tcp_timeout = settings.get('tcp_timeout', Config.DEFAULT_TCP_TIMEOUT)
     raw_count = settings.get('ping_count')
-    if raw_count is None or str(raw_count).strip() in ('', '0', '1'):
+    if raw_count is None or str(raw_count).strip() in ('', '0'):
         ping_count = getattr(Config, 'DEFAULT_PING_PROBE_COUNT', Config.DEFAULT_PING_COUNT)
     else:
         try:
-            ping_count = max(int(raw_count), 20)
+            ping_count = max(Config.MIN_PING_COUNT, min(int(raw_count), Config.MAX_PING_COUNT))
         except (ValueError, TypeError):
             ping_count = getattr(Config, 'DEFAULT_PING_PROBE_COUNT', Config.DEFAULT_PING_COUNT)
     warning_thresh = settings.get('packet_loss_warning_pct', getattr(Config, 'DEFAULT_PACKET_LOSS_WARNING_PCT', 5))
@@ -535,7 +559,7 @@ def check_device_connectivity(device, settings=None):
         p_rtt = raw_ping_res[1] if len(raw_ping_res) > 1 else None
         p_cat = raw_ping_res[2] if len(raw_ping_res) > 2 else "NONE"
         p_reason = raw_ping_res[3] if len(raw_ping_res) > 3 else None
-        p_sent = ping_count if ping_count else 20
+        p_sent = ping_count if ping_count else getattr(Config, 'DEFAULT_PING_PROBE_COUNT', Config.DEFAULT_PING_COUNT)
         p_rcvd = p_sent if p_reach else 0
         p_lost = 0 if p_reach else p_sent
         p_loss_pct = 0.0 if p_reach else 100.0

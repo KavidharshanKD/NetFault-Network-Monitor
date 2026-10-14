@@ -40,8 +40,8 @@ class Config:
     DEFAULT_MONITOR_INTERVAL = 30  # seconds between periodic cycles
     DEFAULT_PING_TIMEOUT = 2       # ICMP ping timeout in seconds
     DEFAULT_TCP_TIMEOUT = 2        # TCP connection timeout in seconds
-    DEFAULT_PING_COUNT = 20        # ICMP ping probe packet count per check (default 20)
-    DEFAULT_PING_PROBE_COUNT = 20  # Explicit alias for packet loss probes
+    DEFAULT_PING_COUNT = 10        # ICMP ping probe packet count per check (default 10)
+    DEFAULT_PING_PROBE_COUNT = 10  # Explicit alias for packet loss probes
     DEFAULT_CONCURRENCY_LIMIT = 5  # Bounded worker threads for parallel checks
     DEFAULT_AUTO_MONITOR = 1       # 1 = enabled, 0 = disabled
     

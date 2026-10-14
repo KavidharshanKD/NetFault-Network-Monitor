@@ -526,5 +526,92 @@ class TestMonitoring(unittest.TestCase):
         self.assertEqual(check_res['packets_sent'], 20)
         self.assertEqual(check_res['packets_lost'], 3)
 
+    def test_parse_ping_output_10_probes_0_loss(self):
+        """Test with 10 successful replies -> 0% packet loss."""
+        stdout = (
+            "Pinging 8.8.8.8 with 32 bytes of data:\n"
+            "Reply from 8.8.8.8: bytes=32 time=45ms TTL=117\n"
+            "Ping statistics for 8.8.8.8:\n"
+            "    Packets: Sent = 10, Received = 10, Lost = 0 (0% loss),\n"
+            "Approximate round trip times in milli-seconds:\n"
+            "    Minimum = 40ms, Maximum = 65ms, Average = 50ms\n"
+        )
+        res = monitoring.parse_ping_output(stdout, "", returncode=0, count=10, system="Windows")
+        self.assertTrue(res['is_reachable'])
+        self.assertEqual(res['packets_sent'], 10)
+        self.assertEqual(res['packets_received'], 10)
+        self.assertEqual(res['packets_lost'], 0)
+        self.assertEqual(res['packet_loss_percentage'], 0.0)
+        self.assertEqual(res['packet_loss_status'], 'NONE')
+
+    def test_parse_ping_output_10_probes_10_loss(self):
+        """Test with 9 successful replies and 1 lost -> 10% packet loss."""
+        stdout = (
+            "Pinging 8.8.8.8 with 32 bytes of data:\n"
+            "Reply from 8.8.8.8: bytes=32 time=45ms TTL=117\n"
+            "Request timed out.\n"
+            "Ping statistics for 8.8.8.8:\n"
+            "    Packets: Sent = 10, Received = 9, Lost = 1 (10% loss),\n"
+            "Approximate round trip times in milli-seconds:\n"
+            "    Minimum = 42ms, Maximum = 80ms, Average = 55ms\n"
+        )
+        res = monitoring.parse_ping_output(stdout, "", returncode=0, count=10, system="Windows")
+        self.assertTrue(res['is_reachable'])
+        self.assertEqual(res['packets_sent'], 10)
+        self.assertEqual(res['packets_received'], 9)
+        self.assertEqual(res['packets_lost'], 1)
+        self.assertEqual(res['packet_loss_percentage'], 10.0)
+        self.assertEqual(res['packet_loss_status'], 'HIGH')
+
+    def test_parse_ping_output_10_probes_20_loss(self):
+        """Test with 8 successful replies and 2 lost -> 20% packet loss."""
+        stdout = (
+            "Pinging 8.8.8.8 with 32 bytes of data:\n"
+            "Reply from 8.8.8.8: bytes=32 time=45ms TTL=117\n"
+            "Request timed out.\n"
+            "Request timed out.\n"
+            "Ping statistics for 8.8.8.8:\n"
+            "    Packets: Sent = 10, Received = 8, Lost = 2 (20% loss),\n"
+            "Approximate round trip times in milli-seconds:\n"
+            "    Minimum = 45ms, Maximum = 95ms, Average = 60ms\n"
+        )
+        res = monitoring.parse_ping_output(stdout, "", returncode=0, count=10, system="Windows")
+        self.assertTrue(res['is_reachable'])
+        self.assertEqual(res['packets_sent'], 10)
+        self.assertEqual(res['packets_received'], 8)
+        self.assertEqual(res['packets_lost'], 2)
+        self.assertEqual(res['packet_loss_percentage'], 20.0)
+        self.assertEqual(res['packet_loss_status'], 'HIGH')
+
+    def test_parse_ping_output_10_probes_100_loss_confirmed(self):
+        """Test with 0 successful replies -> 100% loss when all 10 probes were actually executed and confirmed unanswered."""
+        stdout = (
+            "Pinging 10.255.255.1 with 32 bytes of data:\n"
+            "Request timed out.\n"
+            "Ping statistics for 10.255.255.1:\n"
+            "    Packets: Sent = 10, Received = 0, Lost = 10 (100% loss),\n"
+        )
+        res = monitoring.parse_ping_output(stdout, "", returncode=1, count=10, system="Windows")
+        self.assertFalse(res['is_reachable'])
+        self.assertEqual(res['packets_sent'], 10)
+        self.assertEqual(res['packets_received'], 0)
+        self.assertEqual(res['packets_lost'], 10)
+        self.assertEqual(res['packet_loss_percentage'], 100.0)
+        self.assertEqual(res['packet_loss_status'], 'HIGH')
+
+    def test_parse_ping_output_0_replies_incomplete_execution(self):
+        """Test when 0 replies received but probe was interrupted before 10 probes finished -> incomplete / unavailable."""
+        stdout = (
+            "Pinging 10.255.255.1 with 32 bytes of data:\n"
+            "Request timed out.\n"
+            "Ping statistics for 10.255.255.1:\n"
+            "    Packets: Sent = 3, Received = 0, Lost = 3 (100% loss),\n"
+        )
+        res = monitoring.parse_ping_output(stdout, "", returncode=1, count=10, system="Windows")
+        self.assertFalse(res['is_reachable'])
+        self.assertIsNone(res['packet_loss_percentage'])
+        self.assertEqual(res['packet_loss_status'], 'UNAVAILABLE')
+        self.assertIn("Incomplete probe execution", res['error'])
+
 if __name__ == '__main__':
     unittest.main()

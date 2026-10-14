@@ -1373,9 +1373,9 @@ def ensure_default_settings(client=None):
 
     try:
         cnt_res = c.table('application_settings').select('setting_value').eq('setting_key', 'ping_count').execute()
-        if cnt_res.data and str(cnt_res.data[0].get('setting_value', '')).strip() in ('0', '1'):
+        if cnt_res.data and str(cnt_res.data[0].get('setting_value', '')).strip() in ('0', '1', '20'):
             c.table('application_settings').update({
-                'setting_value': 20,
+                'setting_value': getattr(Config, 'DEFAULT_PING_PROBE_COUNT', Config.DEFAULT_PING_COUNT),
                 'updated_at': datetime.now(timezone.utc).isoformat()
             }).eq('setting_key', 'ping_count').execute()
     except Exception as e:
