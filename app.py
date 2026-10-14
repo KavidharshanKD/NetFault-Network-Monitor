@@ -849,6 +849,25 @@ def create_app(config_object=Config):
 
         result = scheduler.check_single_device(device_id)
         updated_device = database.get_device_by_id(device_id, user_id=user_id)
+        if result and isinstance(result, dict):
+            pct = result.get('packet_loss_percentage', result.get('packet_loss_pct'))
+            result['packet_loss_percentage'] = pct
+            result['packet_loss_pct'] = pct
+            result['minimum_rtt_ms'] = result.get('minimum_rtt_ms', result.get('min_rtt_ms'))
+            result['min_rtt_ms'] = result.get('minimum_rtt_ms', result.get('min_rtt_ms'))
+            result['maximum_rtt_ms'] = result.get('maximum_rtt_ms', result.get('max_rtt_ms'))
+            result['max_rtt_ms'] = result.get('maximum_rtt_ms', result.get('max_rtt_ms'))
+            result['average_rtt_ms'] = result.get('average_rtt_ms', result.get('avg_rtt_ms'))
+            result['avg_rtt_ms'] = result.get('average_rtt_ms', result.get('avg_rtt_ms'))
+
+        if updated_device and result and isinstance(result, dict):
+            for k in ['packets_sent', 'packets_received', 'packets_lost', 'packet_loss_pct',
+                      'packet_loss_percentage', 'min_rtt_ms', 'minimum_rtt_ms', 'max_rtt_ms',
+                      'maximum_rtt_ms', 'avg_rtt_ms', 'average_rtt_ms', 'packet_loss_status',
+                      'packet_loss_band_label', 'packet_loss_badge']:
+                if updated_device.get(k) is None and result.get(k) is not None:
+                    updated_device[k] = result[k]
+
         return jsonify({
             'success': True,
             'result': result,

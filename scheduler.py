@@ -81,9 +81,13 @@ class MonitoringScheduler:
                     packets_received=result.get('packets_received'),
                     packets_lost=result.get('packets_lost'),
                     packet_loss_pct=result.get('packet_loss_pct'),
+                    packet_loss_percentage=result.get('packet_loss_percentage'),
                     min_rtt_ms=result.get('min_rtt_ms'),
+                    minimum_rtt_ms=result.get('minimum_rtt_ms'),
                     max_rtt_ms=result.get('max_rtt_ms'),
+                    maximum_rtt_ms=result.get('maximum_rtt_ms'),
                     avg_rtt_ms=result.get('avg_rtt_ms'),
+                    average_rtt_ms=result.get('average_rtt_ms'),
                     packet_loss_status=result.get('packet_loss_status')
                 )
             except Exception as db_err:

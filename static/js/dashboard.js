@@ -277,8 +277,11 @@ function updateDeviceRow(device) {
 
     // Packet Loss Badge
     let lossBadge = '<span class="badge badge-neutral" title="Packet loss telemetry unavailable">N/A</span>';
-    if (device.packet_loss_pct !== null && device.packet_loss_pct !== undefined) {
-        const lossVal = parseFloat(device.packet_loss_pct);
+    const rawLoss = device.packet_loss_percentage !== undefined && device.packet_loss_percentage !== null
+        ? device.packet_loss_percentage
+        : device.packet_loss_pct;
+    if (rawLoss !== null && rawLoss !== undefined) {
+        const lossVal = parseFloat(rawLoss);
         const sent = device.packets_sent !== null && device.packets_sent !== undefined ? device.packets_sent : 0;
         const rcvd = device.packets_received !== null && device.packets_received !== undefined ? device.packets_received : 0;
         const lost = device.packets_lost !== null && device.packets_lost !== undefined ? device.packets_lost : 0;

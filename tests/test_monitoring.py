@@ -444,21 +444,87 @@ class TestMonitoring(unittest.TestCase):
             'packets_sent': 20,
             'packets_received': 19,
             'packets_lost': 1,
+            'packet_loss_percentage': 5.0,
             'packet_loss_pct': 5.0,
+            'minimum_rtt_ms': 4.0,
             'min_rtt_ms': 4.0,
+            'maximum_rtt_ms': 25.0,
             'max_rtt_ms': 25.0,
+            'average_rtt_ms': 8.5,
             'avg_rtt_ms': 8.5,
             'packet_loss_status': 'MODERATE'
         }
         device = {'id': 10, 'ip_address': '10.0.0.1', 'port': None}
         res = monitoring.check_device_connectivity(device)
+        self.assertEqual(res['packet_loss_percentage'], 5.0)
         self.assertEqual(res['packet_loss_pct'], 5.0)
         self.assertEqual(res['packets_sent'], 20)
+        self.assertEqual(res['packets_received'], 19)
         self.assertEqual(res['packets_lost'], 1)
-        self.assertEqual(res['min_rtt_ms'], 4.0)
-        self.assertEqual(res['max_rtt_ms'], 25.0)
-        self.assertEqual(res['avg_rtt_ms'], 8.5)
+        self.assertEqual(res['minimum_rtt_ms'], 4.0)
+        self.assertEqual(res['maximum_rtt_ms'], 25.0)
+        self.assertEqual(res['average_rtt_ms'], 8.5)
         self.assertEqual(res['packet_loss_status'], 'MODERATE')
+        self.assertEqual(res['overall_status'], 'UP')
+
+    def test_parse_ping_output_windows_partial_loss_canonical_fields(self):
+        """Test parsing Windows ping output with partial packet loss and canonical field names."""
+        stdout = (
+            "Pinging 8.8.8.8 with 32 bytes of data:\n"
+            "Reply from 8.8.8.8: bytes=32 time=45ms TTL=117\n"
+            "Reply from 8.8.8.8: bytes=32 time=75ms TTL=117\n"
+            "Request timed out.\n"
+            "Reply from 8.8.8.8: bytes=32 time=385ms TTL=117\n\n"
+            "Ping statistics for 8.8.8.8:\n"
+            "    Packets: Sent = 20, Received = 17, Lost = 3 (15% loss),\n"
+            "Approximate round trip times in milli-seconds:\n"
+            "    Minimum = 45ms, Maximum = 385ms, Average = 75ms\n"
+        )
+        res = monitoring.parse_ping_output(stdout, "", returncode=0, count=20, system="Windows")
+        self.assertTrue(res['is_reachable'])
+        self.assertTrue(res['reachable'])
+        self.assertEqual(res['packets_sent'], 20)
+        self.assertEqual(res['packets_received'], 17)
+        self.assertEqual(res['packets_lost'], 3)
+        self.assertEqual(res['packet_loss_percentage'], 15.0)
+        self.assertEqual(res['packet_loss_pct'], 15.0)
+        self.assertEqual(res['minimum_rtt_ms'], 45.0)
+        self.assertEqual(res['min_rtt_ms'], 45.0)
+        self.assertEqual(res['maximum_rtt_ms'], 385.0)
+        self.assertEqual(res['max_rtt_ms'], 385.0)
+        self.assertEqual(res['average_rtt_ms'], 75.0)
+        self.assertEqual(res['avg_rtt_ms'], 75.0)
+        self.assertEqual(res['packet_loss_status'], 'HIGH')
+
+    @patch('monitoring.ping_host')
+    def test_device_status_remains_up_during_packet_loss(self, mock_ping):
+        """Ensure device classification remains UP when packet loss is experienced as long as reachable."""
+        mock_ping.return_value = {
+            'is_reachable': True,
+            'reachable': True,
+            'response_time_ms': 75.0,
+            'fault_category': 'NONE',
+            'fault_details': None,
+            'packets_sent': 20,
+            'packets_received': 17,
+            'packets_lost': 3,
+            'packet_loss_percentage': 15.0,
+            'packet_loss_pct': 15.0,
+            'minimum_rtt_ms': 45.0,
+            'min_rtt_ms': 45.0,
+            'maximum_rtt_ms': 385.0,
+            'max_rtt_ms': 385.0,
+            'average_rtt_ms': 75.0,
+            'avg_rtt_ms': 75.0,
+            'packet_loss_status': 'HIGH'
+        }
+        device = {'id': 'test-dev-1', 'ip_address': '8.8.8.8', 'port': None}
+        check_res = monitoring.check_device_connectivity(device)
+        self.assertEqual(check_res['overall_status'], 'UP')
+        self.assertEqual(check_res['reachability_status'], 'REACHABLE')
+        self.assertEqual(check_res['packet_loss_percentage'], 15.0)
+        self.assertEqual(check_res['packets_sent'], 20)
+        self.assertEqual(check_res['packets_lost'], 3)
 
 if __name__ == '__main__':
     unittest.main()

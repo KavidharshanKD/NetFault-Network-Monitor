@@ -328,15 +328,16 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if d.packet_loss_pct is defined and d.packet_loss_pct is not none %}
-                                    {% if d.packet_loss_pct <= 0.0 %}
+                                {% set loss_val = d.packet_loss_percentage if d.packet_loss_percentage is defined and d.packet_loss_percentage is not none else d.packet_loss_pct %}
+                                {% if loss_val is defined and loss_val is not none %}
+                                    {% if loss_val <= 0.0 %}
                                         <span class="badge badge-up" title="Packets: {{ d.packets_received or 0 }}/{{ d.packets_sent or 0 }} received (0 lost)">0.00%</span>
-                                    {% elif d.packet_loss_pct < 5.0 %}
-                                        <span class="badge badge-low-loss" title="Packets: {{ d.packets_received or 0 }}/{{ d.packets_sent or 0 }} received ({{ d.packets_lost or 0 }} lost)">{{ "%.2f"|format(d.packet_loss_pct) }}%</span>
-                                    {% elif d.packet_loss_pct < 10.0 %}
-                                        <span class="badge badge-fault" title="Packets: {{ d.packets_received or 0 }}/{{ d.packets_sent or 0 }} received ({{ d.packets_lost or 0 }} lost)">{{ "%.2f"|format(d.packet_loss_pct) }}%</span>
+                                    {% elif loss_val < 5.0 %}
+                                        <span class="badge badge-low-loss" title="Packets: {{ d.packets_received or 0 }}/{{ d.packets_sent or 0 }} received ({{ d.packets_lost or 0 }} lost)">{{ "%.2f"|format(loss_val) }}%</span>
+                                    {% elif loss_val < 10.0 %}
+                                        <span class="badge badge-fault" title="Packets: {{ d.packets_received or 0 }}/{{ d.packets_sent or 0 }} received ({{ d.packets_lost or 0 }} lost)">{{ "%.2f"|format(loss_val) }}%</span>
                                     {% else %}
-                                        <span class="badge badge-down" title="Packets: {{ d.packets_received or 0 }}/{{ d.packets_sent or 0 }} received ({{ d.packets_lost or 0 }} lost)">{{ "%.2f"|format(d.packet_loss_pct) }}%</span>
+                                        <span class="badge badge-down" title="Packets: {{ d.packets_received or 0 }}/{{ d.packets_sent or 0 }} received ({{ d.packets_lost or 0 }} lost)">{{ "%.2f"|format(loss_val) }}%</span>
                                     {% endif %}
                                 {% else %}
                                     <span class="badge badge-neutral" title="Packet loss telemetry unavailable">N/A</span>

@@ -120,25 +120,27 @@
         <div class="metric-unit">Round-trip latency</div>
     </div>
 
-    <div class="metric-card">
+    <div class="metric-card" id="details-card-packet-loss">
         <div class="metric-label">Packet Loss</div>
-        <div style="margin-top: 8px;">
-            {% if device.packet_loss_pct is defined and device.packet_loss_pct is not none %}
-                {% if device.packet_loss_pct == 0 %}
+        <div style="margin-top: 8px;" id="details-packet-loss-badge">
+            {% set loss_val = device.packet_loss_percentage if device.packet_loss_percentage is defined and device.packet_loss_percentage is not none else device.packet_loss_pct %}
+            {% if loss_val is defined and loss_val is not none %}
+                {% if loss_val <= 0.0 %}
                     <span class="badge badge-up" style="font-size: 14px; padding: 4px 10px;">0.0% (None)</span>
-                {% elif device.packet_loss_pct < 5 %}
-                    <span class="badge badge-low-loss" style="font-size: 14px; padding: 4px 10px;">{{ "%.1f"|format(device.packet_loss_pct) }}% (Low)</span>
-                {% elif device.packet_loss_pct < 10 %}
-                    <span class="badge badge-fault" style="font-size: 14px; padding: 4px 10px;">{{ "%.1f"|format(device.packet_loss_pct) }}% (Moderate)</span>
+                {% elif loss_val < 5.0 %}
+                    <span class="badge badge-low-loss" style="font-size: 14px; padding: 4px 10px;">{{ "%.1f"|format(loss_val) }}% (Low)</span>
+                {% elif loss_val < 10.0 %}
+                    <span class="badge badge-fault" style="font-size: 14px; padding: 4px 10px;">{{ "%.1f"|format(loss_val) }}% (Moderate)</span>
                 {% else %}
-                    <span class="badge badge-down" style="font-size: 14px; padding: 4px 10px;">{{ "%.1f"|format(device.packet_loss_pct) }}% (High)</span>
+                    <span class="badge badge-down" style="font-size: 14px; padding: 4px 10px;">{{ "%.1f"|format(loss_val) }}% (High)</span>
                 {% endif %}
             {% else %}
                 <span class="badge badge-neutral" style="font-size: 14px; padding: 4px 10px;">N/A</span>
             {% endif %}
         </div>
-        <div class="metric-unit" style="margin-top: 8px;">
-            {% if device.packet_loss_pct is defined and device.packet_loss_pct is not none %}
+        <div class="metric-unit" style="margin-top: 8px;" id="details-packet-loss-unit">
+            {% set loss_val = device.packet_loss_percentage if device.packet_loss_percentage is defined and device.packet_loss_percentage is not none else device.packet_loss_pct %}
+            {% if loss_val is defined and loss_val is not none %}
                 {{ device.packets_sent or 0 }} sent &bull; {{ device.packets_lost or 0 }} lost
             {% else %}
                 No probe telemetry
@@ -186,15 +188,19 @@
                 </tr>
                 <tr>
                     <td style="font-weight: 600; color: var(--text-muted);">Packet Loss Telemetry</td>
-                    <td>
-                        {% if device.packet_loss_pct is defined and device.packet_loss_pct is not none %}
-                            <span class="mono"><strong>{{ "%.1f"|format(device.packet_loss_pct) }}%</strong></span>
+                    <td id="details-cfg-packet-loss">
+                        {% set loss_val = device.packet_loss_percentage if device.packet_loss_percentage is defined and device.packet_loss_percentage is not none else device.packet_loss_pct %}
+                        {% if loss_val is defined and loss_val is not none %}
+                            <span class="mono"><strong>{{ "%.1f"|format(loss_val) }}%</strong></span>
                             <span class="text-muted" style="font-size: 12px; margin-left: 6px;">
                                 ({{ device.packets_sent or 0 }} sent, {{ device.packets_received or 0 }} rcvd, {{ device.packets_lost or 0 }} lost)
                             </span>
-                            {% if device.min_rtt_ms is defined and device.min_rtt_ms is not none %}
+                            {% set min_r = device.minimum_rtt_ms if device.minimum_rtt_ms is defined and device.minimum_rtt_ms is not none else device.min_rtt_ms %}
+                            {% set avg_r = device.average_rtt_ms if device.average_rtt_ms is defined and device.average_rtt_ms is not none else device.avg_rtt_ms %}
+                            {% set max_r = device.maximum_rtt_ms if device.maximum_rtt_ms is defined and device.maximum_rtt_ms is not none else device.max_rtt_ms %}
+                            {% if min_r is defined and min_r is not none %}
                                 <div class="text-muted mono" style="font-size: 11.5px; margin-top: 4px;">
-                                    Min: {{ device.min_rtt_ms }}ms &bull; Avg: {{ device.avg_rtt_ms }}ms &bull; Max: {{ device.max_rtt_ms }}ms
+                                    Min: {{ min_r }}ms &bull; Avg: {{ avg_r }}ms &bull; Max: {{ max_r }}ms
                                 </div>
                             {% endif %}
                         {% else %}
@@ -555,9 +561,40 @@ async function triggerDeviceCheck(deviceId) {
             }
         });
         const data = await response.json();
-        if (data.success) {
-            showToast(`Probe completed: ${data.result.overall_status}`);
-            setTimeout(() => location.reload(), 1000);
+        if (data.success && (data.result || data.device)) {
+            const res = data.result || {};
+            const dev = data.device || {};
+            const lossPct = res.packet_loss_percentage !== undefined && res.packet_loss_percentage !== null
+                ? res.packet_loss_percentage
+                : (res.packet_loss_pct !== undefined && res.packet_loss_pct !== null
+                    ? res.packet_loss_pct
+                    : (dev.packet_loss_percentage !== undefined ? dev.packet_loss_percentage : dev.packet_loss_pct));
+
+            const badgeElem = document.getElementById('details-packet-loss-badge');
+            const unitElem = document.getElementById('details-packet-loss-unit');
+            const sent = res.packets_sent !== undefined && res.packets_sent !== null ? res.packets_sent : (dev.packets_sent || 0);
+            const lost = res.packets_lost !== undefined && res.packets_lost !== null ? res.packets_lost : (dev.packets_lost || 0);
+
+            if (lossPct !== null && lossPct !== undefined && badgeElem && unitElem) {
+                const lossVal = parseFloat(lossPct);
+                let badgeClass = 'badge-down';
+                let label = `${lossVal.toFixed(1)}% (High)`;
+                if (lossVal <= 0.0) {
+                    badgeClass = 'badge-up';
+                    label = '0.0% (None)';
+                } else if (lossVal < 5.0) {
+                    badgeClass = 'badge-low-loss';
+                    label = `${lossVal.toFixed(1)}% (Low)`;
+                } else if (lossVal < 10.0) {
+                    badgeClass = 'badge-fault';
+                    label = `${lossVal.toFixed(1)}% (Moderate)`;
+                }
+                badgeElem.innerHTML = `<span class="badge ${badgeClass}" style="font-size: 14px; padding: 4px 10px;">${label}</span>`;
+                unitElem.innerHTML = `${sent} sent &bull; ${lost} lost`;
+            }
+
+            showToast(`Probe completed: ${res.overall_status || dev.overall_status || 'OK'}`);
+            setTimeout(() => location.reload(), 800);
         } else {
             showToast(data.error || "Check failed", true);
         }

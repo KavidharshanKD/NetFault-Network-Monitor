@@ -154,15 +154,16 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if h.packet_loss_pct is defined and h.packet_loss_pct is not none %}
-                                    {% if h.packet_loss_pct == 0 %}
+                                {% set loss_val = h.packet_loss_percentage if h.packet_loss_percentage is defined and h.packet_loss_percentage is not none else h.packet_loss_pct %}
+                                {% if loss_val is defined and loss_val is not none %}
+                                    {% if loss_val <= 0.0 %}
                                         <span class="badge badge-up" title="Sent: {{ h.packets_sent or 0 }}, Lost: {{ h.packets_lost or 0 }}">0.0%</span>
-                                    {% elif h.packet_loss_pct < 5 %}
-                                        <span class="badge badge-low-loss" title="Sent: {{ h.packets_sent or 0 }}, Lost: {{ h.packets_lost or 0 }}">{{ "%.1f"|format(h.packet_loss_pct) }}%</span>
-                                    {% elif h.packet_loss_pct < 10 %}
-                                        <span class="badge badge-fault" title="Sent: {{ h.packets_sent or 0 }}, Lost: {{ h.packets_lost or 0 }}">{{ "%.1f"|format(h.packet_loss_pct) }}%</span>
+                                    {% elif loss_val < 5.0 %}
+                                        <span class="badge badge-low-loss" title="Sent: {{ h.packets_sent or 0 }}, Lost: {{ h.packets_lost or 0 }}">{{ "%.1f"|format(loss_val) }}%</span>
+                                    {% elif loss_val < 10.0 %}
+                                        <span class="badge badge-fault" title="Sent: {{ h.packets_sent or 0 }}, Lost: {{ h.packets_lost or 0 }}">{{ "%.1f"|format(loss_val) }}%</span>
                                     {% else %}
-                                        <span class="badge badge-down" title="Sent: {{ h.packets_sent or 0 }}, Lost: {{ h.packets_lost or 0 }}">{{ "%.1f"|format(h.packet_loss_pct) }}%</span>
+                                        <span class="badge badge-down" title="Sent: {{ h.packets_sent or 0 }}, Lost: {{ h.packets_lost or 0 }}">{{ "%.1f"|format(loss_val) }}%</span>
                                     {% endif %}
                                 {% else %}
                                     <span class="badge badge-neutral">N/A</span>

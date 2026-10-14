@@ -17,9 +17,109 @@ from config import Config
 
 logger = logging.getLogger(__name__)
 
+import re
+
 # Thread-safe cached Supabase client
 _supabase_client = None
 _client_lock = threading.Lock()
+
+# Telemetry metadata regex for backward-compatible persistence and decoding
+_TELEMETRY_REGEX = re.compile(
+    r'\[\[(?:telemetry:)?loss:([0-9\.\-]+)\|sent:([0-9]+)\|rcvd:([0-9]+)\|lost:([0-9]+)\|min:([0-9\.\-none]+)\|max:([0-9\.\-none]+)\|avg:([0-9\.\-none]+)\|status:([a-zA-Z0-9_\-]+)\]\]',
+    re.IGNORECASE
+)
+
+# Thread-safe in-memory cache for latest device packet-loss telemetry
+_latest_device_telemetry = {}
+_telemetry_cache_lock = threading.Lock()
+
+def enrich_record_with_packet_loss(record, device_id=None):
+    """
+    Enriches a device or monitoring history record with packet loss and RTT metrics.
+    Resolves metrics from:
+    1. Dedicated record columns (if migration 004 is applied in Supabase).
+    2. Embedded telemetry tag in fault_details (resilient storage in core schema).
+    3. Thread-safe in-memory latest telemetry cache.
+    Populates both canonical and legacy field names, and cleans fault_details for UI presentation.
+    """
+    if not isinstance(record, dict):
+        return record
+
+    dev_id = str(device_id or record.get('device_id') or record.get('id') or '').strip()
+    fault_det = record.get('fault_details') or ''
+
+    # Check for embedded telemetry tag in fault_details
+    tag_match = _TELEMETRY_REGEX.search(fault_det) if fault_det else None
+    if tag_match:
+        try:
+            t_loss = float(tag_match.group(1))
+            t_sent = int(tag_match.group(2))
+            t_rcvd = int(tag_match.group(3))
+            t_lost = int(tag_match.group(4))
+            t_min = float(tag_match.group(5)) if tag_match.group(5).lower() != 'none' else None
+            t_max = float(tag_match.group(6)) if tag_match.group(6).lower() != 'none' else None
+            t_avg = float(tag_match.group(7)) if tag_match.group(7).lower() != 'none' else None
+            t_status = tag_match.group(8)
+
+            if record.get('packet_loss_pct') is None and record.get('packet_loss_percentage') is None:
+                record['packet_loss_pct'] = t_loss
+                record['packet_loss_percentage'] = t_loss
+                record['packets_sent'] = t_sent
+                record['packets_received'] = t_rcvd
+                record['packets_lost'] = t_lost
+                record['min_rtt_ms'] = t_min
+                record['minimum_rtt_ms'] = t_min
+                record['max_rtt_ms'] = t_max
+                record['maximum_rtt_ms'] = t_max
+                record['avg_rtt_ms'] = t_avg
+                record['average_rtt_ms'] = t_avg
+                record['packet_loss_status'] = t_status
+        except Exception:
+            pass
+
+        cleaned_details = _TELEMETRY_REGEX.sub('', fault_det).strip()
+        record['fault_details'] = cleaned_details if cleaned_details else None
+
+    # Check in-memory cache if fields are still None
+    if dev_id and (record.get('packet_loss_pct') is None and record.get('packet_loss_percentage') is None):
+        with _telemetry_cache_lock:
+            cached = _latest_device_telemetry.get(dev_id)
+        if cached:
+            for k, v in cached.items():
+                if record.get(k) is None:
+                    record[k] = v
+
+    # Normalize aliases across both canonical and legacy conventions
+    pct = record.get('packet_loss_percentage') if record.get('packet_loss_percentage') is not None else record.get('packet_loss_pct')
+    if pct is not None:
+        try:
+            pct = round(float(pct), 2)
+        except (ValueError, TypeError):
+            pct = None
+    record['packet_loss_pct'] = pct
+    record['packet_loss_percentage'] = pct
+
+    min_r = record.get('minimum_rtt_ms') if record.get('minimum_rtt_ms') is not None else record.get('min_rtt_ms')
+    max_r = record.get('maximum_rtt_ms') if record.get('maximum_rtt_ms') is not None else record.get('max_rtt_ms')
+    avg_r = record.get('average_rtt_ms') if record.get('average_rtt_ms') is not None else record.get('avg_rtt_ms')
+    record['min_rtt_ms'] = min_r
+    record['minimum_rtt_ms'] = min_r
+    record['max_rtt_ms'] = max_r
+    record['maximum_rtt_ms'] = max_r
+    record['avg_rtt_ms'] = avg_r
+    record['average_rtt_ms'] = avg_r
+
+    if record.get('packet_loss_status') is None and pct is not None:
+        if pct <= 0.0:
+            record['packet_loss_status'] = 'NONE'
+        elif pct < 5.0:
+            record['packet_loss_status'] = 'LOW'
+        elif pct < 10.0:
+            record['packet_loss_status'] = 'MODERATE'
+        else:
+            record['packet_loss_status'] = 'HIGH'
+
+    return record
 
 class SupabaseConfigError(Exception):
     """Raised when Supabase URL or Service Role Key is missing or invalid."""
@@ -449,7 +549,10 @@ def get_all_devices(search=None, status_filter=None, sort_by=None, sort_dir='asc
             query = query.range(offset, offset + pp - 1)
 
         res = query.execute()
-        return res.data or []
+        devices = res.data or []
+        for d in devices:
+            enrich_record_with_packet_loss(d)
+        return devices
     except Exception as e:
         logger.error(f"Error executing get_all_devices in Supabase: {e}")
         # Fallback to querying devices table directly:
@@ -470,10 +573,23 @@ def get_all_devices(search=None, status_filter=None, sort_by=None, sort_dir='asc
                              .execute()
                     if h_res.data:
                         latest = h_res.data[0]
+                        enrich_record_with_packet_loss(latest, str(d['id']))
                         d['overall_status'] = latest.get('overall_status')
                         d['reachability_status'] = latest.get('reachability_status')
                         d['service_status'] = latest.get('service_status')
                         d['response_time_ms'] = latest.get('response_time_ms')
+                        d['packets_sent'] = latest.get('packets_sent')
+                        d['packets_received'] = latest.get('packets_received')
+                        d['packets_lost'] = latest.get('packets_lost')
+                        d['packet_loss_pct'] = latest.get('packet_loss_pct')
+                        d['packet_loss_percentage'] = latest.get('packet_loss_percentage')
+                        d['min_rtt_ms'] = latest.get('min_rtt_ms')
+                        d['minimum_rtt_ms'] = latest.get('minimum_rtt_ms')
+                        d['max_rtt_ms'] = latest.get('max_rtt_ms')
+                        d['maximum_rtt_ms'] = latest.get('maximum_rtt_ms')
+                        d['avg_rtt_ms'] = latest.get('avg_rtt_ms')
+                        d['average_rtt_ms'] = latest.get('average_rtt_ms')
+                        d['packet_loss_status'] = latest.get('packet_loss_status')
                         d['fault_category'] = latest.get('fault_category')
                         d['fault_details'] = latest.get('fault_details')
                         d['last_checked'] = latest.get('checked_at')
@@ -482,11 +598,24 @@ def get_all_devices(search=None, status_filter=None, sort_by=None, sort_dir='asc
                         d['reachability_status'] = None
                         d['service_status'] = None
                         d['response_time_ms'] = None
+                        d['packets_sent'] = None
+                        d['packets_received'] = None
+                        d['packets_lost'] = None
+                        d['packet_loss_pct'] = None
+                        d['packet_loss_percentage'] = None
+                        d['min_rtt_ms'] = None
+                        d['minimum_rtt_ms'] = None
+                        d['max_rtt_ms'] = None
+                        d['maximum_rtt_ms'] = None
+                        d['avg_rtt_ms'] = None
+                        d['average_rtt_ms'] = None
+                        d['packet_loss_status'] = None
                         d['fault_category'] = None
                         d['fault_details'] = None
                         d['last_checked'] = None
                 except Exception:
                     pass
+                enrich_record_with_packet_loss(d)
             return devices
         except Exception as inner_e:
             logger.error(f"Fallback get_all_devices also failed: {inner_e}")
@@ -551,14 +680,7 @@ def get_device_by_id(device_id, user_id=None, client=None):
             pass
 
         if device:
-            device.setdefault('packets_sent', None)
-            device.setdefault('packets_received', None)
-            device.setdefault('packets_lost', None)
-            device.setdefault('packet_loss_pct', None)
-            device.setdefault('min_rtt_ms', None)
-            device.setdefault('max_rtt_ms', None)
-            device.setdefault('avg_rtt_ms', None)
-            device.setdefault('packet_loss_status', None)
+            enrich_record_with_packet_loss(device, dev_id_str)
 
         if not device:
             res = c.table('devices').select('*').eq('id', dev_id_str).execute()
@@ -576,6 +698,7 @@ def get_device_by_id(device_id, user_id=None, client=None):
                          .execute()
                 if h_res.data:
                     latest = h_res.data[0]
+                    enrich_record_with_packet_loss(latest, dev_id_str)
                     device['overall_status'] = latest.get('overall_status')
                     device['reachability_status'] = latest.get('reachability_status')
                     device['service_status'] = latest.get('service_status')
@@ -584,9 +707,13 @@ def get_device_by_id(device_id, user_id=None, client=None):
                     device['packets_received'] = latest.get('packets_received')
                     device['packets_lost'] = latest.get('packets_lost')
                     device['packet_loss_pct'] = latest.get('packet_loss_pct')
+                    device['packet_loss_percentage'] = latest.get('packet_loss_percentage')
                     device['min_rtt_ms'] = latest.get('min_rtt_ms')
+                    device['minimum_rtt_ms'] = latest.get('minimum_rtt_ms')
                     device['max_rtt_ms'] = latest.get('max_rtt_ms')
+                    device['maximum_rtt_ms'] = latest.get('maximum_rtt_ms')
                     device['avg_rtt_ms'] = latest.get('avg_rtt_ms')
+                    device['average_rtt_ms'] = latest.get('average_rtt_ms')
                     device['packet_loss_status'] = latest.get('packet_loss_status')
                     device['fault_category'] = latest.get('fault_category')
                     device['fault_details'] = latest.get('fault_details')
@@ -600,9 +727,13 @@ def get_device_by_id(device_id, user_id=None, client=None):
                     device['packets_received'] = None
                     device['packets_lost'] = None
                     device['packet_loss_pct'] = None
+                    device['packet_loss_percentage'] = None
                     device['min_rtt_ms'] = None
+                    device['minimum_rtt_ms'] = None
                     device['max_rtt_ms'] = None
+                    device['maximum_rtt_ms'] = None
                     device['avg_rtt_ms'] = None
+                    device['average_rtt_ms'] = None
                     device['packet_loss_status'] = None
                     device['fault_category'] = None
                     device['fault_details'] = None
@@ -617,6 +748,9 @@ def get_device_by_id(device_id, user_id=None, client=None):
             if dev_user_id is not None and str(dev_user_id) != str(user_id):
                 logger.warning(f"Forbidden device access: device {dev_id_str} owned by {dev_user_id}, requested by {user_id}")
                 return None
+
+        if device:
+            enrich_record_with_packet_loss(device, dev_id_str)
 
         return device
     except Exception as e:
@@ -751,8 +885,11 @@ def delete_device(device_id, user_id=None, client=None):
 def record_monitoring_result(device_id, reachability_status, service_status, overall_status,
                              response_time_ms=None, fault_category=None, fault_details=None,
                              packets_sent=None, packets_received=None, packets_lost=None,
-                             packet_loss_pct=None, min_rtt_ms=None, max_rtt_ms=None,
-                             avg_rtt_ms=None, packet_loss_status=None, client=None):
+                             packet_loss_pct=None, packet_loss_percentage=None,
+                             min_rtt_ms=None, minimum_rtt_ms=None,
+                             max_rtt_ms=None, maximum_rtt_ms=None,
+                             avg_rtt_ms=None, average_rtt_ms=None,
+                             packet_loss_status=None, client=None):
     """
     Inserts a new monitoring check record for a device into monitoring_history.
     Persists ICMP/TCP connectivity statuses and detailed packet loss metrics.
@@ -760,14 +897,51 @@ def record_monitoring_result(device_id, reachability_status, service_status, ove
     Returns the newly created record UUID string.
     """
     c = get_supabase_client(client)
+    loss_val = packet_loss_percentage if packet_loss_percentage is not None else packet_loss_pct
+    min_val = minimum_rtt_ms if minimum_rtt_ms is not None else min_rtt_ms
+    max_val = maximum_rtt_ms if maximum_rtt_ms is not None else max_rtt_ms
+    avg_val = average_rtt_ms if average_rtt_ms is not None else avg_rtt_ms
+
+    persisted_details = fault_details
+    if loss_val is not None:
+        tag = (
+            f"[[loss:{round(float(loss_val), 2)}|"
+            f"sent:{packets_sent if packets_sent is not None else 20}|"
+            f"rcvd:{packets_received if packets_received is not None else 0}|"
+            f"lost:{packets_lost if packets_lost is not None else 0}|"
+            f"min:{min_val if min_val is not None else 'none'}|"
+            f"max:{max_val if max_val is not None else 'none'}|"
+            f"avg:{avg_val if avg_val is not None else 'none'}|"
+            f"status:{packet_loss_status or 'NONE'}]]"
+        )
+        persisted_details = f"{fault_details} {tag}" if fault_details else tag
+
+    dev_key = str(device_id).strip()
+    if loss_val is not None or packets_sent is not None:
+        with _telemetry_cache_lock:
+            _latest_device_telemetry[dev_key] = {
+                'packets_sent': packets_sent,
+                'packets_received': packets_received,
+                'packets_lost': packets_lost,
+                'packet_loss_pct': loss_val,
+                'packet_loss_percentage': loss_val,
+                'min_rtt_ms': min_val,
+                'minimum_rtt_ms': min_val,
+                'max_rtt_ms': max_val,
+                'maximum_rtt_ms': max_val,
+                'avg_rtt_ms': avg_val,
+                'average_rtt_ms': avg_val,
+                'packet_loss_status': packet_loss_status
+            }
+
     base_payload = {
-        'device_id': str(device_id).strip(),
+        'device_id': dev_key,
         'reachability_status': str(reachability_status),
         'service_status': str(service_status) if service_status is not None else None,
         'overall_status': str(overall_status),
         'response_time_ms': round(float(response_time_ms), 2) if response_time_ms is not None else None,
         'fault_category': str(fault_category) if fault_category else None,
-        'fault_details': str(fault_details) if fault_details else None,
+        'fault_details': str(persisted_details) if persisted_details else None,
         'checked_at': datetime.now(timezone.utc).isoformat()
     }
     extended_payload = dict(base_payload)
@@ -777,14 +951,14 @@ def record_monitoring_result(device_id, reachability_status, service_status, ove
         extended_payload['packets_received'] = int(packets_received)
     if packets_lost is not None:
         extended_payload['packets_lost'] = int(packets_lost)
-    if packet_loss_pct is not None:
-        extended_payload['packet_loss_pct'] = round(float(packet_loss_pct), 2)
-    if min_rtt_ms is not None:
-        extended_payload['min_rtt_ms'] = round(float(min_rtt_ms), 2)
-    if max_rtt_ms is not None:
-        extended_payload['max_rtt_ms'] = round(float(max_rtt_ms), 2)
-    if avg_rtt_ms is not None:
-        extended_payload['avg_rtt_ms'] = round(float(avg_rtt_ms), 2)
+    if loss_val is not None:
+        extended_payload['packet_loss_pct'] = round(float(loss_val), 2)
+    if min_val is not None:
+        extended_payload['min_rtt_ms'] = round(float(min_val), 2)
+    if max_val is not None:
+        extended_payload['max_rtt_ms'] = round(float(max_val), 2)
+    if avg_val is not None:
+        extended_payload['avg_rtt_ms'] = round(float(avg_val), 2)
     if packet_loss_status is not None:
         extended_payload['packet_loss_status'] = str(packet_loss_status)
 
@@ -827,7 +1001,10 @@ def get_device_history(device_id, limit=25, user_id=None, client=None):
                .order('checked_at', desc=True) \
                .limit(int(limit)) \
                .execute()
-        return res.data or []
+        rows = res.data or []
+        for r in rows:
+            enrich_record_with_packet_loss(r, dev_id_str)
+        return rows
     except Exception as e:
         logger.error(f"Error fetching device history from Supabase: {e}")
         return []
@@ -877,6 +1054,9 @@ def get_all_history(device_id=None, status=None, date_from=None, date_to=None,
         query = query.order('checked_at', desc=True).range(offset, offset + pp - 1)
         res = query.execute()
         rows = res.data or []
+
+        for r in rows:
+            enrich_record_with_packet_loss(r)
 
         # If queried from base table without view, enrich device metadata
         if rows and 'device_name' not in rows[0]:
@@ -1127,6 +1307,8 @@ def get_history_timeseries(device_id=None, limit=20, user_id=None, client=None):
 
         # Chronological order (oldest to newest)
         rows = list(reversed(rows))
+        for r in rows:
+            enrich_record_with_packet_loss(r, dev_str if device_id else None)
 
         labels = []
         for r in rows:
@@ -1188,6 +1370,16 @@ def ensure_default_settings(client=None):
                 }).execute()
         except Exception as e:
             logger.debug(f"ensure_default_settings for '{key}': {e}")
+
+    try:
+        cnt_res = c.table('application_settings').select('setting_value').eq('setting_key', 'ping_count').execute()
+        if cnt_res.data and str(cnt_res.data[0].get('setting_value', '')).strip() in ('0', '1'):
+            c.table('application_settings').update({
+                'setting_value': 20,
+                'updated_at': datetime.now(timezone.utc).isoformat()
+            }).eq('setting_key', 'ping_count').execute()
+    except Exception as e:
+        logger.debug(f"Upgrade ping_count note: {e}")
 
 def get_settings(client=None):
     """Reads all configuration settings from application_settings in Supabase with defaults."""

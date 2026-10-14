@@ -139,9 +139,13 @@ def parse_ping_output(stdout, stderr="", returncode=0, count=1, elapsed_total_ms
                 rcvd = int(rcvd_m.group(1))
                 lost = int(lost_m.group(1)) if lost_m else max(0, sent - rcvd)
 
-        # 2. Calculate actual packet loss percentage: (lost / sent) * 100
-        if sent is not None and sent > 0 and lost is not None:
+        # 2. Calculate actual packet loss percentage: ((packets_sent - packets_received) / packets_sent) * 100
+        if sent is not None and sent > 0 and rcvd is not None:
+            lost = max(0, sent - rcvd) if lost is None else lost
+            loss_pct = round(((float(sent) - float(rcvd)) / float(sent)) * 100.0, 2)
+        elif sent is not None and sent > 0 and lost is not None:
             loss_pct = round((float(lost) / float(sent)) * 100.0, 2)
+            rcvd = max(0, sent - lost)
         elif "100% loss" in stdout or "100% de perte" in stdout or "100% Verlust" in stdout:
             if sent is None:
                 sent = count
@@ -217,7 +221,7 @@ def parse_ping_output(stdout, stderr="", returncode=0, count=1, elapsed_total_ms
             sent = int(linux_pkt.group(1))
             rcvd = int(linux_pkt.group(2))
             lost = max(0, sent - rcvd)
-            loss_pct = round((float(lost) / float(sent)) * 100.0, 2) if sent > 0 else 0.0
+            loss_pct = round(((float(sent) - float(rcvd)) / float(sent)) * 100.0, 2) if sent > 0 else 0.0
 
         rtt_match = re.search(
             r"(?:rtt|round-trip)\s+min/avg/max/(?:mdev|stddev)\s*=\s*([0-9\.]+)/([0-9\.]+)/([0-9\.]+)",
@@ -254,13 +258,17 @@ def parse_ping_output(stdout, stderr="", returncode=0, count=1, elapsed_total_ms
         'reachable': is_reachable,
         'rtt_ms': avg_rtt if is_reachable else None,
         'response_time_ms': avg_rtt if is_reachable else None,
-        'min_rtt_ms': min_rtt,
-        'max_rtt_ms': max_rtt,
-        'avg_rtt_ms': avg_rtt,
         'packets_sent': sent,
         'packets_received': rcvd,
         'packets_lost': lost,
+        'packet_loss_percentage': loss_pct,
         'packet_loss_pct': loss_pct,
+        'minimum_rtt_ms': min_rtt,
+        'min_rtt_ms': min_rtt,
+        'maximum_rtt_ms': max_rtt,
+        'max_rtt_ms': max_rtt,
+        'average_rtt_ms': avg_rtt,
+        'avg_rtt_ms': avg_rtt,
         'packet_loss_status': band_key,
         'packet_loss_band_label': band_label,
         'packet_loss_badge': badge_class,
@@ -288,12 +296,16 @@ def ping_host(ip_address, count=None, timeout_sec=None, full_result=False):
         error_dict = {
             'is_reachable': False,
             'rtt_ms': None,
+            'minimum_rtt_ms': None,
             'min_rtt_ms': None,
+            'maximum_rtt_ms': None,
             'max_rtt_ms': None,
+            'average_rtt_ms': None,
             'avg_rtt_ms': None,
             'packets_sent': None,
             'packets_received': None,
             'packets_lost': None,
+            'packet_loss_percentage': None,
             'packet_loss_pct': None,
             'packet_loss_status': 'UNAVAILABLE',
             'packet_loss_band_label': 'N/A',
@@ -348,12 +360,16 @@ def ping_host(ip_address, count=None, timeout_sec=None, full_result=False):
         parsed = {
             'is_reachable': False,
             'rtt_ms': None,
+            'minimum_rtt_ms': None,
             'min_rtt_ms': None,
+            'maximum_rtt_ms': None,
             'max_rtt_ms': None,
+            'average_rtt_ms': None,
             'avg_rtt_ms': None,
             'packets_sent': count,
             'packets_received': None,
             'packets_lost': None,
+            'packet_loss_percentage': None,
             'packet_loss_pct': None,
             'packet_loss_status': 'UNAVAILABLE',
             'packet_loss_band_label': 'N/A',
@@ -368,12 +384,16 @@ def ping_host(ip_address, count=None, timeout_sec=None, full_result=False):
         parsed = {
             'is_reachable': False,
             'rtt_ms': None,
+            'minimum_rtt_ms': None,
             'min_rtt_ms': None,
+            'maximum_rtt_ms': None,
             'max_rtt_ms': None,
+            'average_rtt_ms': None,
             'avg_rtt_ms': None,
             'packets_sent': None,
             'packets_received': None,
             'packets_lost': None,
+            'packet_loss_percentage': None,
             'packet_loss_pct': None,
             'packet_loss_status': 'UNAVAILABLE',
             'packet_loss_band_label': 'N/A',
@@ -389,12 +409,16 @@ def ping_host(ip_address, count=None, timeout_sec=None, full_result=False):
         parsed = {
             'is_reachable': False,
             'rtt_ms': None,
+            'minimum_rtt_ms': None,
             'min_rtt_ms': None,
+            'maximum_rtt_ms': None,
             'max_rtt_ms': None,
+            'average_rtt_ms': None,
             'avg_rtt_ms': None,
             'packets_sent': None,
             'packets_received': None,
             'packets_lost': None,
+            'packet_loss_percentage': None,
             'packet_loss_pct': None,
             'packet_loss_status': 'UNAVAILABLE',
             'packet_loss_band_label': 'N/A',
@@ -487,7 +511,14 @@ def check_device_connectivity(device, settings=None):
     settings = settings or {}
     ping_timeout = settings.get('ping_timeout', Config.DEFAULT_PING_TIMEOUT)
     tcp_timeout = settings.get('tcp_timeout', Config.DEFAULT_TCP_TIMEOUT)
-    ping_count = settings.get('ping_count', getattr(Config, 'DEFAULT_PING_PROBE_COUNT', Config.DEFAULT_PING_COUNT))
+    raw_count = settings.get('ping_count')
+    if raw_count is None or str(raw_count).strip() in ('', '0', '1'):
+        ping_count = getattr(Config, 'DEFAULT_PING_PROBE_COUNT', Config.DEFAULT_PING_COUNT)
+    else:
+        try:
+            ping_count = max(int(raw_count), 20)
+        except (ValueError, TypeError):
+            ping_count = getattr(Config, 'DEFAULT_PING_PROBE_COUNT', Config.DEFAULT_PING_COUNT)
     warning_thresh = settings.get('packet_loss_warning_pct', getattr(Config, 'DEFAULT_PACKET_LOSS_WARNING_PCT', 5))
     critical_thresh = settings.get('packet_loss_critical_pct', getattr(Config, 'DEFAULT_PACKET_LOSS_CRITICAL_PCT', 10))
 
@@ -512,12 +543,16 @@ def check_device_connectivity(device, settings=None):
         ping_res = {
             'is_reachable': p_reach,
             'rtt_ms': p_rtt,
+            'minimum_rtt_ms': p_rtt,
             'min_rtt_ms': p_rtt,
+            'maximum_rtt_ms': p_rtt,
             'max_rtt_ms': p_rtt,
+            'average_rtt_ms': p_rtt,
             'avg_rtt_ms': p_rtt,
             'packets_sent': p_sent,
             'packets_received': p_rcvd,
             'packets_lost': p_lost,
+            'packet_loss_percentage': p_loss_pct,
             'packet_loss_pct': p_loss_pct,
             'packet_loss_status': b_key,
             'packet_loss_band_label': b_lbl,
@@ -535,7 +570,7 @@ def check_device_connectivity(device, settings=None):
     ping_fault = ping_res.get('fault_reason', ping_res.get('fault_details'))
     reachability_status = "REACHABLE" if ping_reachable else "UNREACHABLE"
 
-    loss_pct = ping_res.get('packet_loss_pct')
+    loss_pct = ping_res.get('packet_loss_percentage', ping_res.get('packet_loss_pct'))
     if loss_pct is not None and loss_pct > 0:
         loss_text = f", {loss_pct:.2f}% packet loss ({ping_res.get('packets_lost')}/{ping_res.get('packets_sent')} lost)"
     elif loss_pct == 0.0:
@@ -622,10 +657,14 @@ def check_device_connectivity(device, settings=None):
         'packets_sent': ping_res.get('packets_sent'),
         'packets_received': ping_res.get('packets_received'),
         'packets_lost': ping_res.get('packets_lost'),
-        'packet_loss_pct': ping_res.get('packet_loss_pct'),
-        'min_rtt_ms': ping_res.get('min_rtt_ms'),
-        'max_rtt_ms': ping_res.get('max_rtt_ms'),
-        'avg_rtt_ms': ping_res.get('avg_rtt_ms'),
+        'packet_loss_percentage': ping_res.get('packet_loss_percentage', ping_res.get('packet_loss_pct')),
+        'packet_loss_pct': ping_res.get('packet_loss_percentage', ping_res.get('packet_loss_pct')),
+        'minimum_rtt_ms': ping_res.get('minimum_rtt_ms', ping_res.get('min_rtt_ms')),
+        'min_rtt_ms': ping_res.get('minimum_rtt_ms', ping_res.get('min_rtt_ms')),
+        'maximum_rtt_ms': ping_res.get('maximum_rtt_ms', ping_res.get('max_rtt_ms')),
+        'max_rtt_ms': ping_res.get('maximum_rtt_ms', ping_res.get('max_rtt_ms')),
+        'average_rtt_ms': ping_res.get('average_rtt_ms', ping_res.get('avg_rtt_ms')),
+        'avg_rtt_ms': ping_res.get('average_rtt_ms', ping_res.get('avg_rtt_ms')),
         'packet_loss_status': band_key,
         'packet_loss_band_label': band_label,
         'packet_loss_badge': badge_class,
