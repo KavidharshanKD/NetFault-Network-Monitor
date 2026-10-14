@@ -259,8 +259,31 @@ def diagnose_check(device, current_check, history=None, traceroutes=None,
         else:
             evidence.append(f"Confirmed Observation: Host responded to ICMP echo probe ({response_time} ms).")
 
+        # Check for critical packet loss threshold crossing
+        # (Exclude ICMP_FILTERED devices where ICMP is deliberately blocked by firewall while TCP is UP)
+        pkt_loss_critical = float(settings.get('packet_loss_critical_pct') or settings.get('packet_loss_threshold_pct') or 10.0)
+        pkt_loss_warning = float(settings.get('packet_loss_warning_pct') or 5.0)
+        loss_pct = current_check.get('packet_loss_pct')
+
+        if reachability != 'ICMP_FILTERED' and raw_cat != 'FIREWALL_FILTERED' and loss_pct is not None and loss_pct >= pkt_loss_critical:
+            is_fault = True
+            category = CAT_PACKET_LOSS
+            severity = "WARNING"
+            confidence = "High"
+            probable_cause = (
+                f"Confirmed Observation: Measured packet loss of {loss_pct:.2f}% exceeds configured critical threshold "
+                f"({pkt_loss_critical}%). Probe Transmission: {current_check.get('packets_lost', 0)} of "
+                f"{current_check.get('packets_sent', 20)} echo probes dropped."
+            )
+            evidence.append(f"Packet Loss Threshold Violation: Observed {loss_pct:.2f}% packet loss >= critical limit {pkt_loss_critical}%.")
+            evidence.append(f"Probe Transmission Audit: {current_check.get('packets_sent', 20)} sent, {current_check.get('packets_received', 0)} received, {current_check.get('packets_lost', 0)} lost.")
+            if current_check.get('avg_rtt_ms'):
+                evidence.append(f"ICMP Latency Statistics: min={current_check.get('min_rtt_ms')} ms, avg={current_check.get('avg_rtt_ms')} ms, max={current_check.get('max_rtt_ms')} ms.")
+            recommended_action = (
+                f"Perform hop-by-hop route trace to isolate intermediate hop packet loss or inspect network interface counters on {ip}."
+            )
         # Check for significant latency degradation
-        if response_time is not None and response_time >= latency_threshold:
+        elif response_time is not None and response_time >= latency_threshold:
             # Check if this is a spike or sustained
             recent_high = sum(
                 1 for h in history[:3]
@@ -330,6 +353,14 @@ def diagnose_check(device, current_check, history=None, traceroutes=None,
         'detection_timestamp': now_iso,
         'last_successful_check': last_successful_check,
         'response_time_ms': response_time,
+        'packets_sent': current_check.get('packets_sent'),
+        'packets_received': current_check.get('packets_received'),
+        'packets_lost': current_check.get('packets_lost'),
+        'packet_loss_pct': current_check.get('packet_loss_pct'),
+        'min_rtt_ms': current_check.get('min_rtt_ms'),
+        'max_rtt_ms': current_check.get('max_rtt_ms'),
+        'avg_rtt_ms': current_check.get('avg_rtt_ms'),
+        'packet_loss_status': current_check.get('packet_loss_status'),
         'is_fault': is_fault,
         'is_recovery': is_recovery
     }

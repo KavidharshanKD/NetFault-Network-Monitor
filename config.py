@@ -40,7 +40,8 @@ class Config:
     DEFAULT_MONITOR_INTERVAL = 30  # seconds between periodic cycles
     DEFAULT_PING_TIMEOUT = 2       # ICMP ping timeout in seconds
     DEFAULT_TCP_TIMEOUT = 2        # TCP connection timeout in seconds
-    DEFAULT_PING_COUNT = 1         # ICMP ping packet count per check
+    DEFAULT_PING_COUNT = 20        # ICMP ping probe packet count per check (default 20)
+    DEFAULT_PING_PROBE_COUNT = 20  # Explicit alias for packet loss probes
     DEFAULT_CONCURRENCY_LIMIT = 5  # Bounded worker threads for parallel checks
     DEFAULT_AUTO_MONITOR = 1       # 1 = enabled, 0 = disabled
     
@@ -63,9 +64,12 @@ class Config:
     DEFAULT_ALERT_ON_DOWN = 1
     DEFAULT_ALERT_ON_FAULT = 1
     DEFAULT_ALERT_ON_LATENCY = 1
+    DEFAULT_ALERT_ON_PACKET_LOSS = 1
     DEFAULT_ALERT_ON_RECOVERY = 1
     DEFAULT_LATENCY_THRESHOLD_MS = 200
-    DEFAULT_PACKET_LOSS_THRESHOLD_PCT = 50
+    DEFAULT_PACKET_LOSS_WARNING_PCT = 5     # Warning threshold for packet drop degradation
+    DEFAULT_PACKET_LOSS_CRITICAL_PCT = 10   # Critical threshold for packet loss
+    DEFAULT_PACKET_LOSS_THRESHOLD_PCT = 10  # Legacy compatibility alias
 
     # Validation Boundaries
     MIN_MONITOR_INTERVAL = 5
@@ -75,7 +79,7 @@ class Config:
     MIN_TCP_TIMEOUT = 1
     MAX_TCP_TIMEOUT = 30
     MIN_PING_COUNT = 1
-    MAX_PING_COUNT = 10
+    MAX_PING_COUNT = 100
     MIN_CONCURRENCY_LIMIT = 1
     MAX_CONCURRENCY_LIMIT = 20
     MIN_LATENCY_THRESHOLD_MS = 10

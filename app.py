@@ -567,6 +567,11 @@ def create_app(config_object=Config):
                 t['hops'] = json.loads(t['hops_json']) if isinstance(t.get('hops_json'), str) else t.get('hops_json', [])
             except Exception:
                 t['hops'] = []
+            t['total_hops'] = len(t['hops']) if t['hops'] else t.get('total_hops', 0)
+            t['responding_hops'] = sum(1 for h in t['hops'] if h.get('status') != 'TIMED_OUT' and h.get('ip') != '*')
+            t['non_responsive_hops'] = sum(1 for h in t['hops'] if h.get('status') == 'TIMED_OUT' or h.get('ip') == '*')
+            target_ip_clean = str(device.get('ip_address', '')).strip()
+            t['destination_hop'] = next((h.get('hop') for h in t['hops'] if str(h.get('ip', '')).strip() == target_ip_clean), None)
         return render_template(
             'device_details.html',
             device=device,
@@ -733,9 +738,12 @@ def create_app(config_object=Config):
                 alert_on_down = 1 if request.form.get('alert_on_down') in ('1', 'on', 'true', True) else 0
                 alert_on_fault = 1 if request.form.get('alert_on_fault') in ('1', 'on', 'true', True) else 0
                 alert_on_latency = 1 if request.form.get('alert_on_latency') in ('1', 'on', 'true', True) else 0
+                alert_on_packet_loss = 1 if request.form.get('alert_on_packet_loss') in ('1', 'on', 'true', True) else 0
                 alert_on_recovery = 1 if request.form.get('alert_on_recovery') in ('1', 'on', 'true', True) else 0
                 latency_threshold_ms = int(request.form.get('latency_threshold_ms', Config.DEFAULT_LATENCY_THRESHOLD_MS))
-                packet_loss_threshold_pct = int(request.form.get('packet_loss_threshold_pct', Config.DEFAULT_PACKET_LOSS_THRESHOLD_PCT))
+                packet_loss_warning_pct = int(request.form.get('packet_loss_warning_pct', getattr(Config, 'DEFAULT_PACKET_LOSS_WARNING_PCT', 5)))
+                packet_loss_critical_pct = int(request.form.get('packet_loss_critical_pct', getattr(Config, 'DEFAULT_PACKET_LOSS_CRITICAL_PCT', 10)))
+                packet_loss_threshold_pct = packet_loss_critical_pct
 
                 if not (Config.MIN_MONITOR_INTERVAL <= monitor_interval <= Config.MAX_MONITOR_INTERVAL):
                     errors.append(f"Interval must be between {Config.MIN_MONITOR_INTERVAL} and {Config.MAX_MONITOR_INTERVAL} seconds.")
@@ -751,6 +759,15 @@ def create_app(config_object=Config):
 
                 if not (Config.MIN_CONCURRENCY_LIMIT <= concurrency_limit <= Config.MAX_CONCURRENCY_LIMIT):
                     errors.append(f"Concurrency limit must be between {Config.MIN_CONCURRENCY_LIMIT} and {Config.MAX_CONCURRENCY_LIMIT}.")
+
+                if not (Config.MIN_PACKET_LOSS_THRESHOLD_PCT <= packet_loss_warning_pct <= Config.MAX_PACKET_LOSS_THRESHOLD_PCT):
+                    errors.append(f"Packet loss warning threshold must be between {Config.MIN_PACKET_LOSS_THRESHOLD_PCT}% and {Config.MAX_PACKET_LOSS_THRESHOLD_PCT}%.")
+
+                if not (Config.MIN_PACKET_LOSS_THRESHOLD_PCT <= packet_loss_critical_pct <= Config.MAX_PACKET_LOSS_THRESHOLD_PCT):
+                    errors.append(f"Packet loss critical threshold must be between {Config.MIN_PACKET_LOSS_THRESHOLD_PCT}% and {Config.MAX_PACKET_LOSS_THRESHOLD_PCT}%.")
+
+                if packet_loss_warning_pct > packet_loss_critical_pct:
+                    errors.append("Packet loss warning threshold cannot exceed critical threshold.")
 
                 if email_notifications_enabled and alert_recipient_email:
                     # Validate comma-separated emails
@@ -775,6 +792,9 @@ def create_app(config_object=Config):
                     ping_count=ping_count,
                     concurrency_limit=concurrency_limit,
                     auto_monitoring=auto_monitoring,
+                    packet_loss_warning_pct=packet_loss_warning_pct,
+                    packet_loss_critical_pct=packet_loss_critical_pct,
+                    alert_on_packet_loss=alert_on_packet_loss,
                     email_notifications_enabled=email_notifications_enabled,
                     alert_recipient_email=alert_recipient_email,
                     alert_on_down=alert_on_down,
@@ -931,8 +951,8 @@ def create_app(config_object=Config):
         if not device:
             return jsonify({'success': False, 'error': 'Device not found or unauthorized'}), 404
 
-        max_hops = min(20, max(5, int(request.json.get('max_hops', 15) if request.is_json else 15)))
-        timeout_ms = min(3000, max(500, int(request.json.get('timeout_ms', 1000) if request.is_json else 1000)))
+        max_hops = min(30, max(5, int(request.json.get('max_hops', 15) if request.is_json else 15)))
+        timeout_ms = min(5000, max(500, int(request.json.get('timeout_ms', 2000) if request.is_json else 2000)))
 
         trace_result = monitoring.run_traceroute(
             target_ip=device['ip_address'],

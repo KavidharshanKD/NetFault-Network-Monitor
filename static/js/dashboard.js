@@ -275,6 +275,26 @@ function updateDeviceRow(device) {
         overallBadge = '<span class="badge badge-down">✕ DOWN</span>';
     }
 
+    // Packet Loss Badge
+    let lossBadge = '<span class="badge badge-neutral" title="Packet loss telemetry unavailable">N/A</span>';
+    if (device.packet_loss_pct !== null && device.packet_loss_pct !== undefined) {
+        const lossVal = parseFloat(device.packet_loss_pct);
+        const sent = device.packets_sent !== null && device.packets_sent !== undefined ? device.packets_sent : 0;
+        const rcvd = device.packets_received !== null && device.packets_received !== undefined ? device.packets_received : 0;
+        const lost = device.packets_lost !== null && device.packets_lost !== undefined ? device.packets_lost : 0;
+        const tooltip = `Packets: ${rcvd}/${sent} received (${lost} lost)`;
+
+        if (lossVal <= 0.0) {
+            lossBadge = `<span class="badge badge-up" title="${tooltip}">0.00%</span>`;
+        } else if (lossVal < 5.0) {
+            lossBadge = `<span class="badge badge-low-loss" title="${tooltip}">${lossVal.toFixed(2)}%</span>`;
+        } else if (lossVal < 10.0) {
+            lossBadge = `<span class="badge badge-fault" title="${tooltip}">${lossVal.toFixed(2)}%</span>`;
+        } else {
+            lossBadge = `<span class="badge badge-down" title="${tooltip}">${lossVal.toFixed(2)}%</span>`;
+        }
+    }
+
     const latencyText = device.response_time_ms !== null && device.response_time_ms !== undefined 
         ? `${device.response_time_ms} ms` 
         : '<span class="text-muted">—</span>';
@@ -284,8 +304,9 @@ function updateDeviceRow(device) {
     row.cells[3].innerHTML = reachBadge;
     row.cells[4].innerHTML = servBadge;
     row.cells[5].innerHTML = overallBadge;
-    row.cells[6].innerHTML = latencyText;
-    row.cells[7].textContent = lastChecked;
+    row.cells[6].innerHTML = lossBadge;
+    row.cells[7].innerHTML = latencyText;
+    row.cells[8].textContent = lastChecked;
 }
 
 function applySummaryData(summary) {

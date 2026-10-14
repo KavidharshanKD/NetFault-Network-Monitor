@@ -1,12 +1,4 @@
--- ============================================================================
--- Automated Fault Detection System (AFDS)
--- Migration 003: Intelligent Incidents & Email Notification History
--- ============================================================================
 
--- ----------------------------------------------------------------------------
--- Table: incidents
--- Tracks persistent incident lifecycle, diagnostic findings, and recovery
--- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS incidents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     incident_id TEXT UNIQUE NOT NULL,

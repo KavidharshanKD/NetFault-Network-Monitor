@@ -208,5 +208,257 @@ class TestMonitoring(unittest.TestCase):
         self.assertTrue(res['fault_localized'])
         self.assertIn("Invalid target IP", res['fault_summary'])
 
+    def test_windows_traceroute_supplied_sample_output(self):
+        """
+        Verify exact Windows tracert output supplied by user:
+        Destination 8.8.8.8 reached at hop 14 after intermediate timeouts (hops 2-6 and 9-10).
+        Verifies correct hop counts, responding IPs, non-responsive hops, and absence of false fault.
+        """
+        mock_output = (
+            "Tracing route to 8.8.8.8 over a maximum of 15 hops\n\n"
+            "  1     4 ms     1 ms     1 ms  10.178.60.116\n"
+            "  2     *        *        *     Request timed out.\n"
+            "  3     *        *        *     Request timed out.\n"
+            "  4     *        *        *     Request timed out.\n"
+            "  5     *        *        *     Request timed out.\n"
+            "  6     *        *        *     Request timed out.\n"
+            "  7    25 ms    24 ms    24 ms  172.26.75.89\n"
+            "  8    26 ms    26 ms    26 ms  192.168.68.134\n"
+            "  9     *        *        *     Request timed out.\n"
+            " 10     *        *        *     Request timed out.\n"
+            " 11    27 ms    27 ms    26 ms  72.14.195.122\n"
+            " 12    28 ms    28 ms    28 ms  142.251.66.185\n"
+            " 13    29 ms    28 ms    28 ms  142.251.55.121\n"
+            " 14    27 ms    28 ms    28 ms  8.8.8.8\n\n"
+            "Trace complete.\n"
+        )
+        res = monitoring.parse_tracert_output(mock_output, "8.8.8.8")
+
+        # 1. Destination reachability
+        self.assertTrue(res['destination_reached'], "Destination 8.8.8.8 must be marked reached")
+        self.assertEqual(res['destination_hop'], 14, "Destination must be reached at hop 14")
+        self.assertTrue(res['trace_completed'])
+        self.assertFalse(res['execution_incomplete'])
+
+        # 2. No false fault claim
+        self.assertIsNone(res['fault_hop'], "fault_hop must be None when destination is reached")
+        self.assertFalse(res['fault_localized'])
+
+        # 3. Dynamic hop counts
+        self.assertEqual(res['total_hops'], 14, "Total numbered hops must be exactly 14")
+        self.assertEqual(res['responding_hops'], 7, "Responding hops must be exactly 7")
+        self.assertEqual(res['non_responsive_hops'], 7, "Non-responsive hops must be exactly 7")
+
+        # 4. Responding hop IPs
+        expected_responding_ips = [
+            '10.178.60.116', '172.26.75.89', '192.168.68.134',
+            '72.14.195.122', '142.251.66.185', '142.251.55.121', '8.8.8.8'
+        ]
+        actual_responding_ips = [h['ip'] for h in res['hops'] if h['status'] != 'TIMED_OUT']
+        self.assertEqual(actual_responding_ips, expected_responding_ips)
+
+        # 5. Timed-out intermediate hops (2-6 and 9-10)
+        timed_out_hop_nums = [h['hop'] for h in res['hops'] if h['status'] == 'TIMED_OUT']
+        self.assertEqual(timed_out_hop_nums, [2, 3, 4, 5, 6, 9, 10])
+
+        # 6. Fault summary text
+        self.assertIn("Destination 8.8.8.8 reached at hop 14", res['fault_summary'])
+        self.assertIn("7 responding hop(s)", res['fault_summary'])
+        self.assertIn("7 non-responsive hop(s)", res['fault_summary'])
+
+    def test_traceroute_all_hops_respond(self):
+        """Test case where all hops respond with nominal latencies to destination."""
+        mock_output = (
+            "Tracing route to 1.1.1.1 over a maximum of 15 hops\n\n"
+            "  1     1 ms     1 ms     1 ms  192.168.1.1\n"
+            "  2     8 ms     7 ms     8 ms  10.0.0.1\n"
+            "  3    12 ms    11 ms    12 ms  172.16.0.1\n"
+            "  4    15 ms    14 ms    15 ms  1.1.1.1\n\n"
+            "Trace complete.\n"
+        )
+        res = monitoring.parse_tracert_output(mock_output, "1.1.1.1")
+        self.assertTrue(res['destination_reached'])
+        self.assertEqual(res['destination_hop'], 4)
+        self.assertEqual(res['total_hops'], 4)
+        self.assertEqual(res['responding_hops'], 4)
+        self.assertEqual(res['non_responsive_hops'], 0)
+        self.assertIsNone(res['fault_hop'])
+        self.assertFalse(res['fault_localized'])
+        self.assertIn("4 responding hop(s)", res['fault_summary'])
+        self.assertIn("0 non-responsive hop(s)", res['fault_summary'])
+
+    def test_traceroute_destination_responds_after_timeouts(self):
+        """Test case where intermediate router hops time out but destination responds."""
+        mock_output = (
+            "Tracing route to 9.9.9.9 over a maximum of 15 hops\n\n"
+            "  1     2 ms     1 ms     1 ms  192.168.1.1\n"
+            "  2     *        *        *     Request timed out.\n"
+            "  3     *        *        *     Request timed out.\n"
+            "  4    18 ms    17 ms    18 ms  9.9.9.9\n\n"
+            "Trace complete.\n"
+        )
+        res = monitoring.parse_tracert_output(mock_output, "9.9.9.9")
+        self.assertTrue(res['destination_reached'])
+        self.assertEqual(res['destination_hop'], 4)
+        self.assertEqual(res['total_hops'], 4)
+        self.assertEqual(res['responding_hops'], 2)
+        self.assertEqual(res['non_responsive_hops'], 2)
+        self.assertIsNone(res['fault_hop'])
+        self.assertFalse(res['fault_localized'])
+
+    def test_traceroute_execution_incomplete_deadline_expired(self):
+        """
+        Test case where traceroute deadline expired before reaching destination.
+        Verifies partial results are preserved and no false fault (such as Hop 1) is claimed.
+        """
+        partial_output = (
+            "Tracing route to 8.8.8.8 over a maximum of 15 hops\n\n"
+            "  1     4 ms     1 ms     1 ms  10.178.60.116\n"
+            "  2     *        *        *     Request timed out.\n"
+            "  3     *        *        *     Request timed out.\n"
+        )
+        res = monitoring.parse_tracert_output(partial_output, "8.8.8.8", execution_incomplete=True)
+
+        self.assertFalse(res['destination_reached'])
+        self.assertTrue(res['execution_incomplete'])
+        self.assertEqual(res['total_hops'], 3, "Partial hop rows must be preserved")
+        self.assertEqual(res['responding_hops'], 1)
+        self.assertEqual(res['non_responsive_hops'], 2)
+        self.assertIsNone(res['fault_hop'], "Must not claim a fault at Hop 1 when execution is incomplete")
+        self.assertFalse(res['fault_localized'])
+        self.assertIn("Traceroute deadline reached", res['fault_summary'])
+        self.assertIn("Destination reachability unconfirmed", res['fault_summary'])
+
+    def test_packet_loss_band_classification(self):
+        """Test packet loss percentage bands and badge classes."""
+        # 0% loss -> None
+        status, label, badge = monitoring.get_packet_loss_band(0.0)
+        self.assertEqual(status, 'NONE')
+        self.assertIn('0.00%', label)
+        self.assertEqual(badge, 'badge-up')
+
+        # >0% to <5% -> Low
+        status, label, badge = monitoring.get_packet_loss_band(3.5)
+        self.assertEqual(status, 'LOW')
+        self.assertIn('3.50%', label)
+        self.assertEqual(badge, 'badge-low-loss')
+
+        # 5% to <10% -> Moderate
+        status, label, badge = monitoring.get_packet_loss_band(5.0)
+        self.assertEqual(status, 'MODERATE')
+        self.assertIn('5.00%', label)
+        self.assertEqual(badge, 'badge-fault')
+
+        # >=10% -> High
+        status, label, badge = monitoring.get_packet_loss_band(15.0)
+        self.assertEqual(status, 'HIGH')
+        self.assertIn('15.00%', label)
+        self.assertEqual(badge, 'badge-down')
+
+        # None -> Unavailable
+        status, label, badge = monitoring.get_packet_loss_band(None)
+        self.assertEqual(status, 'UNAVAILABLE')
+        self.assertEqual(label, 'N/A')
+        self.assertEqual(badge, 'badge-neutral')
+
+    def test_parse_ping_output_windows_0_loss(self):
+        """Test parsing Windows ping output with 0% packet loss."""
+        stdout = (
+            "Pinging 8.8.8.8 with 32 bytes of data:\n"
+            "Reply from 8.8.8.8: bytes=32 time=14ms TTL=117\n"
+            "Reply from 8.8.8.8: bytes=32 time=15ms TTL=117\n\n"
+            "Ping statistics for 8.8.8.8:\n"
+            "    Packets: Sent = 2, Received = 2, Lost = 0 (0% loss),\n"
+            "Approximate round trip times in milli-seconds:\n"
+            "    Minimum = 14ms, Maximum = 15ms, Average = 14ms\n"
+        )
+        res = monitoring.parse_ping_output(stdout, "", returncode=0, count=2, system="Windows")
+        self.assertTrue(res['reachable'])
+        self.assertEqual(res['packets_sent'], 2)
+        self.assertEqual(res['packets_received'], 2)
+        self.assertEqual(res['packets_lost'], 0)
+        self.assertEqual(res['packet_loss_pct'], 0.0)
+        self.assertEqual(res['min_rtt_ms'], 14.0)
+        self.assertEqual(res['max_rtt_ms'], 15.0)
+        self.assertEqual(res['avg_rtt_ms'], 14.0)
+        self.assertEqual(res['packet_loss_status'], 'NONE')
+
+    def test_parse_ping_output_windows_partial_loss(self):
+        """Test parsing Windows ping output with partial loss (e.g., 20 packets, 2 lost = 10% loss)."""
+        stdout = (
+            "Ping statistics for 192.168.1.1:\n"
+            "    Packets: Sent = 20, Received = 18, Lost = 2 (10% loss),\n"
+            "Approximate round trip times in milli-seconds:\n"
+            "    Minimum = 2ms, Maximum = 45ms, Average = 12ms\n"
+        )
+        res = monitoring.parse_ping_output(stdout, "", returncode=0, count=20, system="Windows")
+        self.assertTrue(res['reachable'])
+        self.assertEqual(res['packets_sent'], 20)
+        self.assertEqual(res['packets_received'], 18)
+        self.assertEqual(res['packets_lost'], 2)
+        self.assertEqual(res['packet_loss_pct'], 10.0)
+        self.assertEqual(res['min_rtt_ms'], 2.0)
+        self.assertEqual(res['max_rtt_ms'], 45.0)
+        self.assertEqual(res['avg_rtt_ms'], 12.0)
+        self.assertEqual(res['packet_loss_status'], 'HIGH')
+
+    def test_parse_ping_output_windows_100_loss(self):
+        """Test parsing Windows ping output with 100% loss (destination unreachable/timeout)."""
+        stdout = (
+            "Request timed out.\n"
+            "Request timed out.\n\n"
+            "Ping statistics for 10.255.255.1:\n"
+            "    Packets: Sent = 2, Received = 0, Lost = 2 (100% loss),\n"
+        )
+        res = monitoring.parse_ping_output(stdout, "", returncode=1, count=2, system="Windows")
+        self.assertFalse(res['reachable'])
+        self.assertEqual(res['packets_sent'], 2)
+        self.assertEqual(res['packets_received'], 0)
+        self.assertEqual(res['packets_lost'], 2)
+        self.assertEqual(res['packet_loss_pct'], 100.0)
+        self.assertIsNone(res['avg_rtt_ms'])
+        self.assertEqual(res['packet_loss_status'], 'HIGH')
+
+    @patch('subprocess.run')
+    @patch('platform.system', return_value='Windows')
+    def test_measure_packet_loss(self, mock_sys, mock_run):
+        """Test measure_packet_loss helper invoking subprocess and parsing metrics."""
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="Packets: Sent = 20, Received = 20, Lost = 0 (0% loss)\nMinimum = 5ms, Maximum = 10ms, Average = 7ms",
+            stderr=""
+        )
+        res = monitoring.measure_packet_loss("192.168.1.1", count=20)
+        self.assertTrue(res['reachable'])
+        self.assertEqual(res['packet_loss_pct'], 0.0)
+        self.assertEqual(res['avg_rtt_ms'], 7.0)
+
+    @patch('monitoring.ping_host')
+    def test_check_device_connectivity_includes_packet_loss(self, mock_ping):
+        """Verify check_device_connectivity populates packet loss telemetry fields."""
+        mock_ping.return_value = {
+            'reachable': True,
+            'response_time_ms': 8.5,
+            'fault_category': 'NONE',
+            'fault_details': None,
+            'packets_sent': 20,
+            'packets_received': 19,
+            'packets_lost': 1,
+            'packet_loss_pct': 5.0,
+            'min_rtt_ms': 4.0,
+            'max_rtt_ms': 25.0,
+            'avg_rtt_ms': 8.5,
+            'packet_loss_status': 'MODERATE'
+        }
+        device = {'id': 10, 'ip_address': '10.0.0.1', 'port': None}
+        res = monitoring.check_device_connectivity(device)
+        self.assertEqual(res['packet_loss_pct'], 5.0)
+        self.assertEqual(res['packets_sent'], 20)
+        self.assertEqual(res['packets_lost'], 1)
+        self.assertEqual(res['min_rtt_ms'], 4.0)
+        self.assertEqual(res['max_rtt_ms'], 25.0)
+        self.assertEqual(res['avg_rtt_ms'], 8.5)
+        self.assertEqual(res['packet_loss_status'], 'MODERATE')
+
 if __name__ == '__main__':
     unittest.main()

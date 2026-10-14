@@ -11,6 +11,17 @@
 
     <form method="POST" action="{{ url_for('settings_view') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <!-- Preserve notification preferences when updating runtime parameters -->
+        <input type="hidden" name="email_notifications_enabled" value="{{ settings.email_notifications_enabled }}">
+        <input type="hidden" name="alert_recipient_email" value="{{ settings.alert_recipient_email or '' }}">
+        <input type="hidden" name="alert_on_down" value="{{ settings.alert_on_down }}">
+        <input type="hidden" name="alert_on_fault" value="{{ settings.alert_on_fault }}">
+        <input type="hidden" name="alert_on_latency" value="{{ settings.alert_on_latency }}">
+        <input type="hidden" name="alert_on_packet_loss" value="{{ settings.alert_on_packet_loss }}">
+        <input type="hidden" name="alert_on_recovery" value="{{ settings.alert_on_recovery }}">
+        <input type="hidden" name="latency_threshold_ms" value="{{ settings.latency_threshold_ms }}">
+        <input type="hidden" name="packet_loss_warning_pct" value="{{ settings.packet_loss_warning_pct }}">
+        <input type="hidden" name="packet_loss_critical_pct" value="{{ settings.packet_loss_critical_pct }}">
 
         <div class="form-group">
             <label class="form-label" for="monitor_interval">
@@ -52,7 +63,7 @@
 
         <div class="form-group">
             <label class="form-label" for="ping_count">
-                ICMP Ping Attempts per Check <span class="req">*</span>
+                ICMP Ping Probes per Cycle (Packet Loss & Reachability) <span class="req">*</span>
             </label>
             <input 
                 type="number" 
@@ -60,12 +71,12 @@
                 name="ping_count" 
                 class="form-input mono" 
                 min="1" 
-                max="10" 
-                value="{{ settings.ping_count }}" 
+                max="100" 
+                value="{{ settings.ping_count or 20 }}" 
                 required
             >
             <div class="form-hint">
-                Number of echo probe packets transmitted per device reachability verification (Range: 1 to 10). Default: 1.
+                Number of echo probe packets transmitted per check cycle for reachability and packet loss measurement (Range: 1 to 100). Default: 20.
             </div>
         </div>
 
@@ -208,6 +219,10 @@
                     <input type="checkbox" id="alert_on_latency" name="alert_on_latency" value="1" {% if settings.alert_on_latency == 1 %}checked{% endif %}>
                     <span>Sustained Latency Degradation</span>
                 </label>
+                <label class="form-check" for="alert_on_packet_loss">
+                    <input type="checkbox" id="alert_on_packet_loss" name="alert_on_packet_loss" value="1" {% if settings.alert_on_packet_loss == 1 %}checked{% endif %}>
+                    <span>Critical Packet Loss Threshold Crossed</span>
+                </label>
                 <label class="form-check" for="alert_on_recovery">
                     <input type="checkbox" id="alert_on_recovery" name="alert_on_recovery" value="1" {% if settings.alert_on_recovery == 1 %}checked{% endif %}>
                     <span>Device Recovery (Restored UP)</span>
@@ -216,10 +231,10 @@
         </div>
 
         <!-- Thresholds -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
             <div class="form-group">
                 <label class="form-label" for="latency_threshold_ms">
-                    Latency Degradation Threshold (ms)
+                    Latency Threshold (ms)
                 </label>
                 <input 
                     type="number" 
@@ -234,19 +249,35 @@
             </div>
 
             <div class="form-group">
-                <label class="form-label" for="packet_loss_threshold_pct">
-                    Packet Loss Threshold (%)
+                <label class="form-label" for="packet_loss_warning_pct">
+                    Packet Loss Warning (%)
                 </label>
                 <input 
                     type="number" 
-                    id="packet_loss_threshold_pct" 
-                    name="packet_loss_threshold_pct" 
+                    id="packet_loss_warning_pct" 
+                    name="packet_loss_warning_pct" 
                     class="form-input mono" 
                     min="1" 
                     max="100" 
-                    value="{{ settings.packet_loss_threshold_pct or 50 }}"
+                    value="{{ settings.packet_loss_warning_pct or 5 }}"
                 >
-                <div class="form-hint">Alert triggers when measured packet drop percentage exceeds this limit. Default: 50%.</div>
+                <div class="form-hint">Moderate loss warning band boundary. Default: 5%.</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="packet_loss_critical_pct">
+                    Packet Loss Critical (%)
+                </label>
+                <input 
+                    type="number" 
+                    id="packet_loss_critical_pct" 
+                    name="packet_loss_critical_pct" 
+                    class="form-input mono" 
+                    min="1" 
+                    max="100" 
+                    value="{{ settings.packet_loss_critical_pct or 10 }}"
+                >
+                <div class="form-hint">High loss critical threshold for email notification dispatch. Default: 10%.</div>
             </div>
         </div>
 

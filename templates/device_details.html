@@ -75,7 +75,7 @@
 {% endif %}
 
 <!-- Diagnostics Grid -->
-<div class="summary-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 20px;">
+<div class="summary-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 20px;">
     <div class="metric-card">
         <div class="metric-label">Overall Status</div>
         <div style="margin-top: 8px;">
@@ -119,6 +119,32 @@
         </div>
         <div class="metric-unit">Round-trip latency</div>
     </div>
+
+    <div class="metric-card">
+        <div class="metric-label">Packet Loss</div>
+        <div style="margin-top: 8px;">
+            {% if device.packet_loss_pct is defined and device.packet_loss_pct is not none %}
+                {% if device.packet_loss_pct == 0 %}
+                    <span class="badge badge-up" style="font-size: 14px; padding: 4px 10px;">0.0% (None)</span>
+                {% elif device.packet_loss_pct < 5 %}
+                    <span class="badge badge-low-loss" style="font-size: 14px; padding: 4px 10px;">{{ "%.1f"|format(device.packet_loss_pct) }}% (Low)</span>
+                {% elif device.packet_loss_pct < 10 %}
+                    <span class="badge badge-fault" style="font-size: 14px; padding: 4px 10px;">{{ "%.1f"|format(device.packet_loss_pct) }}% (Moderate)</span>
+                {% else %}
+                    <span class="badge badge-down" style="font-size: 14px; padding: 4px 10px;">{{ "%.1f"|format(device.packet_loss_pct) }}% (High)</span>
+                {% endif %}
+            {% else %}
+                <span class="badge badge-neutral" style="font-size: 14px; padding: 4px 10px;">N/A</span>
+            {% endif %}
+        </div>
+        <div class="metric-unit" style="margin-top: 8px;">
+            {% if device.packet_loss_pct is defined and device.packet_loss_pct is not none %}
+                {{ device.packets_sent or 0 }} sent &bull; {{ device.packets_lost or 0 }} lost
+            {% else %}
+                No probe telemetry
+            {% endif %}
+        </div>
+    </div>
 </div>
 
 <!-- Details & Diagnostic Info -->
@@ -159,6 +185,24 @@
                     </td>
                 </tr>
                 <tr>
+                    <td style="font-weight: 600; color: var(--text-muted);">Packet Loss Telemetry</td>
+                    <td>
+                        {% if device.packet_loss_pct is defined and device.packet_loss_pct is not none %}
+                            <span class="mono"><strong>{{ "%.1f"|format(device.packet_loss_pct) }}%</strong></span>
+                            <span class="text-muted" style="font-size: 12px; margin-left: 6px;">
+                                ({{ device.packets_sent or 0 }} sent, {{ device.packets_received or 0 }} rcvd, {{ device.packets_lost or 0 }} lost)
+                            </span>
+                            {% if device.min_rtt_ms is defined and device.min_rtt_ms is not none %}
+                                <div class="text-muted mono" style="font-size: 11.5px; margin-top: 4px;">
+                                    Min: {{ device.min_rtt_ms }}ms &bull; Avg: {{ device.avg_rtt_ms }}ms &bull; Max: {{ device.max_rtt_ms }}ms
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <span class="badge badge-neutral">N/A</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
                     <td style="font-weight: 600; color: var(--text-muted);">Last Inspection</td>
                     <td class="mono">{{ device.last_checked or 'Never' }}</td>
                 </tr>
@@ -173,7 +217,7 @@
     <!-- Device Response Time Chart -->
     <div class="chart-card">
         <div class="card-header">
-            <span class="card-title">Latency History (ms)</span>
+            <span class="card-title">Latency & Packet Loss Telemetry</span>
         </div>
         <div class="chart-canvas-container">
             <canvas id="deviceChart"></canvas>
@@ -215,29 +259,32 @@
         {% if traceroutes and traceroutes|length > 0 %}
             {% set latest_trace = traceroutes[0] %}
             <!-- Diagnostic Assessment Banner -->
-            <div class="trace-diagnosis-box {% if latest_trace.destination_reached %}success{% elif latest_trace.fault_hop %}fault{% else %}down{% endif %}">
+            <div class="trace-diagnosis-box {% if latest_trace.destination_reached %}success{% elif latest_trace.fault_hop %}fault{% else %}incomplete{% endif %}">
                 <div style="font-size: 18px; line-height: 1; display: flex; align-items: center;">
                     {% if latest_trace.destination_reached %}
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--success);"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                     {% elif latest_trace.fault_hop %}
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--warning);"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                     {% else %}
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--danger);"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--brand-accent);"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                     {% endif %}
                 </div>
                 <div style="flex: 1;">
                     <strong style="display: block; margin-bottom: 2px;">
                         {% if latest_trace.destination_reached %}
-                            Route Path Verified ({{ latest_trace.total_hops }} Hops Observed)
+                            Route Path Verified: Destination Reached at Hop {{ latest_trace.destination_hop or latest_trace.total_hops }}
                         {% elif latest_trace.fault_hop %}
                             Fault Localized at Hop {{ latest_trace.fault_hop }}
                         {% else %}
-                            Route Interrupted
+                            Trace Incomplete / Destination Unconfirmed
                         {% endif %}
                     </strong>
                     <div>{{ latest_trace.fault_summary }}</div>
-                    <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;" class="mono">
-                        Last inspected: {{ latest_trace.executed_at }}
+                    <div style="display: flex; gap: 8px; margin-top: 8px; font-size: 11.5px; align-items: center; flex-wrap: wrap;">
+                        <span class="badge badge-neutral mono"><strong>{{ latest_trace.total_hops }}</strong> Numbered Hops</span>
+                        <span class="badge badge-up mono"><strong>{{ latest_trace.responding_hops }}</strong> Responding</span>
+                        <span class="badge {% if latest_trace.non_responsive_hops > 0 %}badge-neutral{% else %}badge-up{% endif %} mono"><strong>{{ latest_trace.non_responsive_hops }}</strong> Non-responsive</span>
+                        <span class="mono text-muted" style="font-size: 11px; margin-left: auto;">Last inspected: {{ latest_trace.executed_at }}</span>
                     </div>
                 </div>
             </div>
@@ -289,13 +336,19 @@
                         </svg>
                     </div>
 
-                    <div class="hop-node {% if latest_trace.destination_reached %}hop-node-success{% else %}hop-node-error{% endif %}">
-                        <span class="hop-badge {% if latest_trace.destination_reached %}hop-badge-success{% else %}hop-badge-error{% endif %}">
+                    <div class="hop-node {% if latest_trace.destination_reached %}hop-node-success{% elif latest_trace.fault_hop %}hop-node-error{% else %}hop-node-warning{% endif %}">
+                        <span class="hop-badge {% if latest_trace.destination_reached %}hop-badge-success{% elif latest_trace.fault_hop %}hop-badge-error{% else %}hop-badge-warning{% endif %}">
                             TARGET
                         </span>
                         <div class="hop-ip">{{ device.ip_address }}</div>
                         <div class="hop-rtt">
-                            {% if latest_trace.destination_reached %}REACHED{% else %}UNREACHABLE{% endif %}
+                            {% if latest_trace.destination_reached %}
+                                REACHED (Hop {{ latest_trace.destination_hop or latest_trace.total_hops }})
+                            {% elif latest_trace.fault_hop %}
+                                UNREACHABLE
+                            {% else %}
+                                UNCONFIRMED IN TRACE
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -382,6 +435,7 @@
                     <th>Service Status</th>
                     <th>Overall Status</th>
                     <th>Response Time</th>
+                    <th>Packet Loss</th>
                     <th>Fault Category</th>
                     <th>Diagnostic Details</th>
                 </tr>
@@ -389,7 +443,7 @@
             <tbody>
                 {% if history|length == 0 %}
                     <tr>
-                        <td colspan="7">
+                        <td colspan="8">
                             <div class="empty-table-state">
                                 <p><strong>No monitoring history recorded for this device yet.</strong></p>
                                 <p style="margin-top: 4px; font-size: 12px;">Click "Check Now" to execute an immediate probe.</p>
@@ -442,6 +496,21 @@
                                     {{ h.response_time_ms }} ms
                                 {% else %}
                                     <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if h.packet_loss_pct is defined and h.packet_loss_pct is not none %}
+                                    {% if h.packet_loss_pct == 0 %}
+                                        <span class="badge badge-up" title="Sent: {{ h.packets_sent or 0 }}, Lost: {{ h.packets_lost or 0 }}">0.0%</span>
+                                    {% elif h.packet_loss_pct < 5 %}
+                                        <span class="badge badge-low-loss" title="Sent: {{ h.packets_sent or 0 }}, Lost: {{ h.packets_lost or 0 }}">{{ "%.1f"|format(h.packet_loss_pct) }}%</span>
+                                    {% elif h.packet_loss_pct < 10 %}
+                                        <span class="badge badge-fault" title="Sent: {{ h.packets_sent or 0 }}, Lost: {{ h.packets_lost or 0 }}">{{ "%.1f"|format(h.packet_loss_pct) }}%</span>
+                                    {% else %}
+                                        <span class="badge badge-down" title="Sent: {{ h.packets_sent or 0 }}, Lost: {{ h.packets_lost or 0 }}">{{ "%.1f"|format(h.packet_loss_pct) }}%</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge badge-neutral">N/A</span>
                                 {% endif %}
                             </td>
                             <td class="mono" style="font-size: 11px;">
@@ -519,7 +588,7 @@ async function triggerTraceroute(deviceId) {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCsrfToken()
             },
-            body: JSON.stringify({ max_hops: 15, timeout_ms: 1000 })
+            body: JSON.stringify({ max_hops: 15, timeout_ms: 2000 })
         });
 
         const data = await response.json();
@@ -545,11 +614,13 @@ async function triggerTraceroute(deviceId) {
 document.addEventListener('DOMContentLoaded', () => {
     const labels = {{ timeseries.labels|tojson }};
     const responseTimes = {{ timeseries.response_times|tojson }};
+    const packetLosses = {{ (timeseries.packet_losses or [])|tojson }};
     const canvas = document.getElementById('deviceChart');
     const emptyMsg = document.getElementById('device-no-chart');
 
-    const validValues = responseTimes.filter(v => v !== null && v !== undefined);
-    if (!validValues || validValues.length === 0) {
+    const validLatency = responseTimes.filter(v => v !== null && v !== undefined);
+    const validLoss = packetLosses.filter(v => v !== null && v !== undefined);
+    if ((!validLatency || validLatency.length === 0) && (!validLoss || validLoss.length === 0)) {
         if (canvas) canvas.style.display = 'none';
         if (emptyMsg) emptyMsg.style.display = 'flex';
         return;
@@ -560,25 +631,80 @@ document.addEventListener('DOMContentLoaded', () => {
             type: 'line',
             data: {
                 labels: labels,
-                datasets: [{
-                    label: 'Latency (ms)',
-                    data: responseTimes,
-                    borderColor: '#0f172a',
-                    backgroundColor: 'rgba(15, 23, 42, 0.05)',
-                    borderWidth: 2,
-                    pointBackgroundColor: '#0f172a',
-                    pointRadius: 4,
-                    fill: true,
-                    tension: 0.2
-                }]
+                datasets: [
+                    {
+                        label: 'Latency (ms)',
+                        data: responseTimes,
+                        borderColor: '#0f172a',
+                        backgroundColor: 'rgba(15, 23, 42, 0.05)',
+                        borderWidth: 2,
+                        pointBackgroundColor: '#0f172a',
+                        pointRadius: 3,
+                        fill: true,
+                        tension: 0.2,
+                        yAxisID: 'y',
+                        spanGaps: false
+                    },
+                    {
+                        label: 'Packet Loss (%)',
+                        data: packetLosses,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointBackgroundColor: '#ef4444',
+                        pointRadius: 3,
+                        fill: false,
+                        tension: 0.1,
+                        yAxisID: 'y1',
+                        spanGaps: false
+                    }
+                ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            font: { size: 11, family: 'Inter, sans-serif' },
+                            boxWidth: 12
+                        }
+                    }
+                },
                 scales: {
-                    x: { ticks: { font: { size: 10, family: 'JetBrains Mono, monospace' } } },
-                    y: { beginAtZero: true, ticks: { font: { size: 10, family: 'JetBrains Mono, monospace' } } }
+                    x: {
+                        ticks: { font: { size: 10, family: 'JetBrains Mono, monospace' } },
+                        grid: { color: 'rgba(0,0,0,0.04)' }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        beginAtZero: true,
+                        title: { display: true, text: 'Latency (ms)', font: { size: 11 } },
+                        ticks: { font: { size: 10, family: 'JetBrains Mono, monospace' } },
+                        grid: { color: 'rgba(0,0,0,0.04)' }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        min: 0,
+                        max: 100,
+                        title: { display: true, text: 'Packet Loss (%)', font: { size: 11 } },
+                        ticks: {
+                            font: { size: 10, family: 'JetBrains Mono, monospace' },
+                            callback: function(value) { return value + '%'; }
+                        },
+                        grid: { drawOnChartArea: false }
+                    }
                 }
             }
         });

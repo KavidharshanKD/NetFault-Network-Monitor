@@ -550,6 +550,16 @@ def get_device_by_id(device_id, user_id=None, client=None):
         except Exception:
             pass
 
+        if device:
+            device.setdefault('packets_sent', None)
+            device.setdefault('packets_received', None)
+            device.setdefault('packets_lost', None)
+            device.setdefault('packet_loss_pct', None)
+            device.setdefault('min_rtt_ms', None)
+            device.setdefault('max_rtt_ms', None)
+            device.setdefault('avg_rtt_ms', None)
+            device.setdefault('packet_loss_status', None)
+
         if not device:
             res = c.table('devices').select('*').eq('id', dev_id_str).execute()
             if not res.data:
@@ -570,6 +580,14 @@ def get_device_by_id(device_id, user_id=None, client=None):
                     device['reachability_status'] = latest.get('reachability_status')
                     device['service_status'] = latest.get('service_status')
                     device['response_time_ms'] = latest.get('response_time_ms')
+                    device['packets_sent'] = latest.get('packets_sent')
+                    device['packets_received'] = latest.get('packets_received')
+                    device['packets_lost'] = latest.get('packets_lost')
+                    device['packet_loss_pct'] = latest.get('packet_loss_pct')
+                    device['min_rtt_ms'] = latest.get('min_rtt_ms')
+                    device['max_rtt_ms'] = latest.get('max_rtt_ms')
+                    device['avg_rtt_ms'] = latest.get('avg_rtt_ms')
+                    device['packet_loss_status'] = latest.get('packet_loss_status')
                     device['fault_category'] = latest.get('fault_category')
                     device['fault_details'] = latest.get('fault_details')
                     device['last_checked'] = latest.get('checked_at')
@@ -578,6 +596,14 @@ def get_device_by_id(device_id, user_id=None, client=None):
                     device['reachability_status'] = None
                     device['service_status'] = None
                     device['response_time_ms'] = None
+                    device['packets_sent'] = None
+                    device['packets_received'] = None
+                    device['packets_lost'] = None
+                    device['packet_loss_pct'] = None
+                    device['min_rtt_ms'] = None
+                    device['max_rtt_ms'] = None
+                    device['avg_rtt_ms'] = None
+                    device['packet_loss_status'] = None
                     device['fault_category'] = None
                     device['fault_details'] = None
                     device['last_checked'] = None
@@ -723,24 +749,57 @@ def delete_device(device_id, user_id=None, client=None):
 # -----------------------------------------------------------------------------
 
 def record_monitoring_result(device_id, reachability_status, service_status, overall_status,
-                             response_time_ms=None, fault_category=None, fault_details=None, client=None):
+                             response_time_ms=None, fault_category=None, fault_details=None,
+                             packets_sent=None, packets_received=None, packets_lost=None,
+                             packet_loss_pct=None, min_rtt_ms=None, max_rtt_ms=None,
+                             avg_rtt_ms=None, packet_loss_status=None, client=None):
     """
     Inserts a new monitoring check record for a device into monitoring_history.
+    Persists ICMP/TCP connectivity statuses and detailed packet loss metrics.
+    Gracefully falls back to core schema if custom packet-loss columns are pending migration.
     Returns the newly created record UUID string.
     """
     c = get_supabase_client(client)
+    base_payload = {
+        'device_id': str(device_id).strip(),
+        'reachability_status': str(reachability_status),
+        'service_status': str(service_status) if service_status is not None else None,
+        'overall_status': str(overall_status),
+        'response_time_ms': round(float(response_time_ms), 2) if response_time_ms is not None else None,
+        'fault_category': str(fault_category) if fault_category else None,
+        'fault_details': str(fault_details) if fault_details else None,
+        'checked_at': datetime.now(timezone.utc).isoformat()
+    }
+    extended_payload = dict(base_payload)
+    if packets_sent is not None:
+        extended_payload['packets_sent'] = int(packets_sent)
+    if packets_received is not None:
+        extended_payload['packets_received'] = int(packets_received)
+    if packets_lost is not None:
+        extended_payload['packets_lost'] = int(packets_lost)
+    if packet_loss_pct is not None:
+        extended_payload['packet_loss_pct'] = round(float(packet_loss_pct), 2)
+    if min_rtt_ms is not None:
+        extended_payload['min_rtt_ms'] = round(float(min_rtt_ms), 2)
+    if max_rtt_ms is not None:
+        extended_payload['max_rtt_ms'] = round(float(max_rtt_ms), 2)
+    if avg_rtt_ms is not None:
+        extended_payload['avg_rtt_ms'] = round(float(avg_rtt_ms), 2)
+    if packet_loss_status is not None:
+        extended_payload['packet_loss_status'] = str(packet_loss_status)
+
     try:
-        payload = {
-            'device_id': str(device_id).strip(),
-            'reachability_status': str(reachability_status),
-            'service_status': str(service_status) if service_status is not None else None,
-            'overall_status': str(overall_status),
-            'response_time_ms': round(float(response_time_ms), 2) if response_time_ms is not None else None,
-            'fault_category': str(fault_category) if fault_category else None,
-            'fault_details': str(fault_details) if fault_details else None,
-            'checked_at': datetime.now(timezone.utc).isoformat()
-        }
-        res = c.table('monitoring_history').insert(payload).execute()
+        try:
+            res = c.table('monitoring_history').insert(extended_payload).execute()
+        except Exception as insert_err:
+            # Fallback if Supabase database lacks migration 004 columns
+            err_str = str(insert_err)
+            if any(col in err_str for col in ['packets_sent', 'packet_loss_pct', 'PGRST204', 'column']):
+                logger.warning(f"Packet loss columns not yet present in Supabase table; falling back to base schema: {insert_err}")
+                res = c.table('monitoring_history').insert(base_payload).execute()
+            else:
+                raise insert_err
+
         if res.data and len(res.data) > 0:
             return res.data[0]['id']
         raise SupabaseDatabaseError("Monitoring history insert did not return an identifier.")
@@ -1054,11 +1113,11 @@ def get_history_timeseries(device_id=None, limit=20, user_id=None, client=None):
             if not owned_device_ids:
                 return {'labels': [], 'response_times': [], 'statuses': [], 'count': 0}
 
-        query = c.table('monitoring_history').select('checked_at, response_time_ms, overall_status, device_id')
+        query = c.table('monitoring_history').select('*')
         if device_id:
             dev_str = str(device_id).strip()
             if owned_device_ids is not None and dev_str not in owned_device_ids:
-                return {'labels': [], 'response_times': [], 'statuses': [], 'count': 0}
+                return {'labels': [], 'response_times': [], 'packet_losses': [], 'statuses': [], 'count': 0}
             query = query.eq('device_id', dev_str)
         elif owned_device_ids is not None:
             query = query.in_('device_id', owned_device_ids)
@@ -1081,17 +1140,24 @@ def get_history_timeseries(device_id=None, limit=20, user_id=None, client=None):
                 labels.append(ca)
 
         response_times = [r.get('response_time_ms') for r in rows]
+        packet_losses = [
+            round(float(r['packet_loss_pct']), 2) 
+            if r.get('packet_loss_pct') is not None 
+            else None 
+            for r in rows
+        ]
         statuses = [r.get('overall_status') for r in rows]
 
         return {
             'labels': labels,
             'response_times': response_times,
+            'packet_losses': packet_losses,
             'statuses': statuses,
             'count': len(rows)
         }
     except Exception as e:
         logger.error(f"Error generating history timeseries from Supabase: {e}")
-        return {'labels': [], 'response_times': [], 'statuses': [], 'count': 0}
+        return {'labels': [], 'response_times': [], 'packet_losses': [], 'statuses': [], 'count': 0}
 
 # -----------------------------------------------------------------------------
 # System Settings (Stored in application_settings)
@@ -1104,9 +1170,12 @@ def ensure_default_settings(client=None):
         ('monitor_interval', Config.DEFAULT_MONITOR_INTERVAL),
         ('ping_timeout', Config.DEFAULT_PING_TIMEOUT),
         ('tcp_timeout', Config.DEFAULT_TCP_TIMEOUT),
-        ('ping_count', Config.DEFAULT_PING_COUNT),
+        ('ping_count', getattr(Config, 'DEFAULT_PING_PROBE_COUNT', Config.DEFAULT_PING_COUNT)),
         ('concurrency_limit', Config.DEFAULT_CONCURRENCY_LIMIT),
-        ('auto_monitoring', Config.DEFAULT_AUTO_MONITOR)
+        ('auto_monitoring', Config.DEFAULT_AUTO_MONITOR),
+        ('packet_loss_warning_pct', getattr(Config, 'DEFAULT_PACKET_LOSS_WARNING_PCT', 5)),
+        ('packet_loss_critical_pct', getattr(Config, 'DEFAULT_PACKET_LOSS_CRITICAL_PCT', 10)),
+        ('alert_on_packet_loss', getattr(Config, 'DEFAULT_ALERT_ON_PACKET_LOSS', 1))
     ]
     for key, val in default_settings:
         try:
@@ -1126,9 +1195,12 @@ def get_settings(client=None):
         'monitor_interval': Config.DEFAULT_MONITOR_INTERVAL,
         'ping_timeout': Config.DEFAULT_PING_TIMEOUT,
         'tcp_timeout': Config.DEFAULT_TCP_TIMEOUT,
-        'ping_count': Config.DEFAULT_PING_COUNT,
+        'ping_count': getattr(Config, 'DEFAULT_PING_PROBE_COUNT', Config.DEFAULT_PING_COUNT),
         'concurrency_limit': Config.DEFAULT_CONCURRENCY_LIMIT,
         'auto_monitoring': Config.DEFAULT_AUTO_MONITOR,
+        'packet_loss_warning_pct': getattr(Config, 'DEFAULT_PACKET_LOSS_WARNING_PCT', 5),
+        'packet_loss_critical_pct': getattr(Config, 'DEFAULT_PACKET_LOSS_CRITICAL_PCT', 10),
+        'alert_on_packet_loss': getattr(Config, 'DEFAULT_ALERT_ON_PACKET_LOSS', 1),
         'email_notifications_enabled': getattr(Config, 'DEFAULT_EMAIL_NOTIFICATIONS', 0),
         'alert_recipient_email': getattr(Config, 'ALERT_RECIPIENT_EMAIL', ''),
         'alert_on_down': getattr(Config, 'DEFAULT_ALERT_ON_DOWN', 1),
@@ -1136,7 +1208,7 @@ def get_settings(client=None):
         'alert_on_latency': getattr(Config, 'DEFAULT_ALERT_ON_LATENCY', 1),
         'alert_on_recovery': getattr(Config, 'DEFAULT_ALERT_ON_RECOVERY', 1),
         'latency_threshold_ms': getattr(Config, 'DEFAULT_LATENCY_THRESHOLD_MS', 200),
-        'packet_loss_threshold_pct': getattr(Config, 'DEFAULT_PACKET_LOSS_THRESHOLD_PCT', 50),
+        'packet_loss_threshold_pct': getattr(Config, 'DEFAULT_PACKET_LOSS_THRESHOLD_PCT', 10),
         'smtp_host': getattr(Config, 'SMTP_HOST', ''),
         'smtp_port': getattr(Config, 'SMTP_PORT', 587),
         'smtp_username': getattr(Config, 'SMTP_USERNAME', ''),
@@ -1181,6 +1253,7 @@ def get_settings(client=None):
 
 def update_settings(monitor_interval=None, ping_timeout=None, tcp_timeout=None, ping_count=None,
                     concurrency_limit=None, auto_monitoring=None,
+                    packet_loss_warning_pct=None, packet_loss_critical_pct=None, alert_on_packet_loss=None,
                     email_notifications_enabled=None, alert_recipient_email=None,
                     alert_on_down=None, alert_on_fault=None, alert_on_latency=None, alert_on_recovery=None,
                     latency_threshold_ms=None, packet_loss_threshold_pct=None,
@@ -1197,6 +1270,9 @@ def update_settings(monitor_interval=None, ping_timeout=None, tcp_timeout=None, 
         ('ping_count', int(ping_count) if ping_count is not None else None),
         ('concurrency_limit', int(concurrency_limit) if concurrency_limit is not None else None),
         ('auto_monitoring', int(auto_monitoring) if auto_monitoring is not None else None),
+        ('packet_loss_warning_pct', int(packet_loss_warning_pct) if packet_loss_warning_pct is not None else None),
+        ('packet_loss_critical_pct', int(packet_loss_critical_pct) if packet_loss_critical_pct is not None else None),
+        ('alert_on_packet_loss', int(alert_on_packet_loss) if alert_on_packet_loss is not None else None),
         ('email_notifications_enabled', int(email_notifications_enabled) if email_notifications_enabled is not None else None),
         ('alert_recipient_email', str(alert_recipient_email).strip() if alert_recipient_email is not None else None),
         ('alert_on_down', int(alert_on_down) if alert_on_down is not None else None),

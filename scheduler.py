@@ -76,7 +76,15 @@ class MonitoringScheduler:
                     overall_status=result['overall_status'],
                     response_time_ms=result['response_time_ms'],
                     fault_category=result.get('fault_category'),
-                    fault_details=result['fault_details']
+                    fault_details=result['fault_details'],
+                    packets_sent=result.get('packets_sent'),
+                    packets_received=result.get('packets_received'),
+                    packets_lost=result.get('packets_lost'),
+                    packet_loss_pct=result.get('packet_loss_pct'),
+                    min_rtt_ms=result.get('min_rtt_ms'),
+                    max_rtt_ms=result.get('max_rtt_ms'),
+                    avg_rtt_ms=result.get('avg_rtt_ms'),
+                    packet_loss_status=result.get('packet_loss_status')
                 )
             except Exception as db_err:
                 logger.error(f"Failed to persist monitoring check to Supabase for device {device_id}: {db_err}")

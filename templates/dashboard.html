@@ -249,6 +249,7 @@
                     <th>Reachability</th>
                     <th>Service Status</th>
                     <th>Overall Status</th>
+                    <th>Packet Loss</th>
                     <th>Response Time</th>
                     <th>Last Checked</th>
                     <th style="text-align: right;">Actions</th>
@@ -257,7 +258,7 @@
             <tbody id="device-table-body">
                 {% if devices|length == 0 %}
                     <tr>
-                        <td colspan="9">
+                        <td colspan="10">
                             <div class="empty-table-state">
                                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                                     <rect x="2" y="2" width="20" height="8" rx="2"></rect>
@@ -324,6 +325,21 @@
                                     <span class="badge badge-down">DOWN</span>
                                 {% else %}
                                     <span class="badge badge-neutral">UNCHECKED</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if d.packet_loss_pct is defined and d.packet_loss_pct is not none %}
+                                    {% if d.packet_loss_pct <= 0.0 %}
+                                        <span class="badge badge-up" title="Packets: {{ d.packets_received or 0 }}/{{ d.packets_sent or 0 }} received (0 lost)">0.00%</span>
+                                    {% elif d.packet_loss_pct < 5.0 %}
+                                        <span class="badge badge-low-loss" title="Packets: {{ d.packets_received or 0 }}/{{ d.packets_sent or 0 }} received ({{ d.packets_lost or 0 }} lost)">{{ "%.2f"|format(d.packet_loss_pct) }}%</span>
+                                    {% elif d.packet_loss_pct < 10.0 %}
+                                        <span class="badge badge-fault" title="Packets: {{ d.packets_received or 0 }}/{{ d.packets_sent or 0 }} received ({{ d.packets_lost or 0 }} lost)">{{ "%.2f"|format(d.packet_loss_pct) }}%</span>
+                                    {% else %}
+                                        <span class="badge badge-down" title="Packets: {{ d.packets_received or 0 }}/{{ d.packets_sent or 0 }} received ({{ d.packets_lost or 0 }} lost)">{{ "%.2f"|format(d.packet_loss_pct) }}%</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge badge-neutral" title="Packet loss telemetry unavailable">N/A</span>
                                 {% endif %}
                             </td>
                             <td class="mono">

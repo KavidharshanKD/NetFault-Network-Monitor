@@ -27,6 +27,10 @@ def generate_history_csv_from_records(records):
         "Reachability Status",
         "Service Status",
         "Overall Status",
+        "Packet Loss (%)",
+        "Packets Sent",
+        "Packets Received",
+        "Packets Lost",
         "Response Time (ms)",
         "Fault Category",
         "Diagnostic Details"
@@ -42,6 +46,10 @@ def generate_history_csv_from_records(records):
             r.get('reachability_status', ''),
             r.get('service_status', ''),
             r.get('overall_status', ''),
+            f"{r.get('packet_loss_pct'):.2f}%" if r.get('packet_loss_pct') is not None else "N/A",
+            r.get('packets_sent') if r.get('packets_sent') is not None else "N/A",
+            r.get('packets_received') if r.get('packets_received') is not None else "N/A",
+            r.get('packets_lost') if r.get('packets_lost') is not None else "N/A",
             r.get('response_time_ms') if r.get('response_time_ms') is not None else "N/A",
             r.get('fault_category') or "NONE",
             r.get('fault_details') or ""

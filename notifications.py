@@ -102,11 +102,31 @@ def build_fault_email(incident, settings=None):
     latency = incident.get('response_time_ms')
     latency_str = f"{latency} ms" if latency is not None else "N/A (Packet loss / unreachable)"
 
+    pkt_loss_pct = incident.get('packet_loss_pct')
+    pkts_sent = incident.get('packets_sent')
+    pkts_rcvd = incident.get('packets_received')
+    pkts_lost = incident.get('packets_lost')
+    min_rtt = incident.get('min_rtt_ms')
+    max_rtt = incident.get('max_rtt_ms')
+    avg_rtt = incident.get('avg_rtt_ms')
+    if pkt_loss_pct is not None:
+        loss_str = f"{pkt_loss_pct:.2f}%"
+        if pkts_sent is not None:
+            loss_str += f" ({pkts_rcvd}/{pkts_sent} received, {pkts_lost} lost)"
+    else:
+        loss_str = "N/A"
+
+    rtt_detail = ""
+    if avg_rtt is not None:
+        rtt_detail = f" (Min: {min_rtt or avg_rtt}ms, Avg: {avg_rtt}ms, Max: {max_rtt or avg_rtt}ms)"
+
     # Subject line based on status & severity
     if status == 'DOWN':
         subject = f"[NetFault CRITICAL] Device DOWN — {dev_name} ({ip})"
     elif status == 'FAULT':
         subject = f"[NetFault FAULT] TCP Service Unavailable — {dev_name} ({ip}{port_str})"
+    elif category_name == 'Measured Packet Loss' or incident.get('fault_category') == 'PACKET_LOSS':
+        subject = f"[NetFault WARNING] High Packet Loss ({loss_str}) — {dev_name} ({ip})"
     else:
         subject = f"[NetFault {severity}] {category_name} — {dev_name} ({ip})"
 
@@ -133,7 +153,8 @@ Status: {status} (Severity: {severity})
 Fault Localization: {loc_layer} — {loc_boundary}
 Failure Detected At: {detected_at}
 Last Successful Check: {last_success}
-Current Latency: {latency_str}
+Packet Loss: {loss_str}
+Current Latency: {latency_str}{rtt_detail}
 Fault Category: {category_name}
 Confidence Level: {confidence}
 
@@ -194,7 +215,8 @@ Dashboard Link:
       <div class="row"><div class="label">Fault Localization:</div><div class="value"><strong style="color: #0f172a;">{loc_layer}</strong> &bull; <span style="color: #b91c1c; font-weight: 600;">{loc_boundary}</span></div></div>
       <div class="row"><div class="label">Failure Detected At:</div><div class="value">{detected_at}</div></div>
       <div class="row"><div class="label">Last Successful Check:</div><div class="value">{last_success}</div></div>
-      <div class="row"><div class="label">Current Latency:</div><div class="value">{latency_str}</div></div>
+      <div class="row"><div class="label">Packet Loss:</div><div class="value"><strong>{loss_str}</strong></div></div>
+      <div class="row"><div class="label">Current Latency:</div><div class="value">{latency_str}{rtt_detail}</div></div>
       <div class="row"><div class="label">Diagnosis Confidence:</div><div class="value"><strong>{confidence}</strong></div></div>
     </div>
 
@@ -473,6 +495,8 @@ def handle_incident_notifications(device, diagnosis, current_check, client=None,
             alert_wanted = False
         elif cat == 'LATENCY_DEGRADATION' and not bool(settings.get('alert_on_latency', 1)):
             alert_wanted = False
+        elif cat == 'PACKET_LOSS' and not bool(settings.get('alert_on_packet_loss', 1)):
+            alert_wanted = False
 
         if not open_incident:
             # CREATE NEW INCIDENT
@@ -494,11 +518,17 @@ def handle_incident_notifications(device, diagnosis, current_check, client=None,
             # DISPATCH IMMEDIATE EMAIL ALERT
             if notifications_enabled and alert_wanted and recipients:
                 subj, plain, html = build_fault_email(diagnosis, settings=settings)
+                notif_type = 'NEW_FAULT'
+                if cat == 'PACKET_LOSS':
+                    notif_type = 'PACKET_LOSS_ALERT'
+                elif cat == 'LATENCY_DEGRADATION':
+                    notif_type = 'LATENCY_WARNING'
+
                 for rec in recipients:
                     dispatch_notification_async(
                         incident_record_id=inc_record.get('id'),
                         recipient_email=rec,
-                        notification_type='NEW_FAULT' if cat != 'LATENCY_DEGRADATION' else 'LATENCY_WARNING',
+                        notification_type=notif_type,
                         subject=subj,
                         plain_text=plain,
                         html_content=html,
