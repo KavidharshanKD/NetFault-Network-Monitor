@@ -7,7 +7,7 @@
 <div class="dashboard-hero" style="padding: 16px 24px;">
     <div class="hero-titles">
         <h2>System Architecture & Environment Runtime</h2>
-        <p>Operational health metrics, runtime versions, and internal SQLite database diagnostics.</p>
+        <p>Operational health metrics, runtime versions, and Supabase PostgreSQL database diagnostics.</p>
     </div>
 </div>
 
@@ -81,18 +81,24 @@
                     <td class="mono text-muted">{{ diag.scheduler_last_cycle }}</td>
                 </tr>
                 <tr>
-                    <td style="font-weight: 600; color: var(--text-muted);">SQLite Engine Version</td>
-                    <td class="mono">SQLite {{ diag.sqlite_version }}</td>
+                    <td style="font-weight: 600; color: var(--text-muted);">Database Engine</td>
+                    <td class="mono"><strong>{{ diag.database_type }}</strong></td>
                 </tr>
                 <tr>
-                    <td style="font-weight: 600; color: var(--text-muted);">Database Path</td>
+                    <td style="font-weight: 600; color: var(--text-muted);">Supabase Endpoint</td>
                     <td class="mono text-muted" style="font-size: 11px; word-break: break-all;">
-                        {{ diag.database_path }}
+                        {{ diag.supabase_url }}
                     </td>
                 </tr>
                 <tr>
-                    <td style="font-weight: 600; color: var(--text-muted);">Database Storage Size</td>
-                    <td class="mono">{{ diag.database_size_kb }} KB</td>
+                    <td style="font-weight: 600; color: var(--text-muted);">Persistence Health</td>
+                    <td>
+                        {% if diag.supabase_configured %}
+                            <span class="badge badge-up">{{ diag.database_status }}</span>
+                        {% else %}
+                            <span class="badge badge-fault">{{ diag.database_status }}</span>
+                        {% endif %}
+                    </td>
                 </tr>
                 <tr>
                     <td style="font-weight: 600; color: var(--text-muted);">Registered Targets</td>

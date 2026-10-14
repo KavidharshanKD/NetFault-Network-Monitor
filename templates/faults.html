@@ -46,8 +46,8 @@
 
             <select name="status" class="filter-input">
                 <option value="ALL" {% if selected_status == 'ALL' %}selected{% endif %}>All Incident States</option>
-                <option value="FAULT" {% if selected_status == 'FAULT' %}selected{% endif %}>▲ FAULT (Degraded)</option>
-                <option value="DOWN" {% if selected_status == 'DOWN' %}selected{% endif %}>✕ DOWN (Unreachable)</option>
+                <option value="FAULT" {% if selected_status == 'FAULT' %}selected{% endif %}>FAULT (Degraded)</option>
+                <option value="DOWN" {% if selected_status == 'DOWN' %}selected{% endif %}>DOWN (Unreachable)</option>
             </select>
 
             <button type="submit" class="btn btn-outline btn-sm">Apply Filter</button>
@@ -62,8 +62,155 @@
     </form>
 </div>
 
-<!-- Fault Reports Table -->
-<div class="card">
+<!-- Tab Switcher -->
+<div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
+    <button class="btn btn-sm btn-primary" id="tab-btn-incidents" onclick="switchFaultTab('incidents')" style="display: inline-flex; align-items: center; gap: 6px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+        </svg>
+        <span>Intelligent Incident History ({{ incidents|length }})</span>
+    </button>
+    <button class="btn btn-sm btn-outline" id="tab-btn-breakdown" onclick="switchFaultTab('breakdown')" style="display: inline-flex; align-items: center; gap: 6px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+        </svg>
+        <span>Active Fault Breakdown ({{ reports|length }})</span>
+    </button>
+    <button class="btn btn-sm btn-outline" id="tab-btn-localization" onclick="switchFaultTab('localization')" style="display: inline-flex; align-items: center; gap: 6px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+        </svg>
+        <span>Hop-by-Hop Fault Localization</span>
+    </button>
+</div>
+
+<!-- Section 1: Intelligent Incidents View -->
+<div id="section-incidents" class="card">
+    <div class="card-header">
+        <div>
+            <span class="card-title">Intelligent Incident Lifecycle & Root-Cause Diagnosis</span>
+            <div class="text-muted" style="font-size: 11.5px; margin-top: 2px;">
+                Tracked incidents with root-cause analysis, confidence scores, and email notification audit trails.
+            </div>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Incident ID</th>
+                    <th>Device</th>
+                    <th>Category</th>
+                    <th>Fault Localization</th>
+                    <th>Severity</th>
+                    <th>Status</th>
+                    <th>Confidence</th>
+                    <th>Detected Time</th>
+                    <th>Resolution</th>
+                    <th>Probable Cause</th>
+                    <th style="text-align: right;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if incidents|length == 0 %}
+                    <tr>
+                        <td colspan="11">
+                            <div class="empty-table-state">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                </svg>
+                                <p><strong>No incident records logged.</strong></p>
+                                <p style="margin-top: 4px; font-size: 12px;">New incidents are created immediately when outages or service faults are detected.</p>
+                            </div>
+                        </td>
+                    </tr>
+                {% else %}
+                    {% for inc in incidents %}
+                        <tr>
+                            <td class="mono" style="font-size: 12px; font-weight: 700;">
+                                <a href="javascript:void(0)" onclick="openIncidentModal('{{ inc.id }}')" style="color: var(--brand-accent); text-decoration: none;">
+                                    {{ inc.incident_id }}
+                                </a>
+                            </td>
+                            <td>
+                                <strong><a href="{{ url_for('device_details', device_id=inc.device_id) }}" style="color: var(--text-primary); text-decoration: none;">{{ inc.device_name }}</a></strong>
+                                <div class="mono text-muted" style="font-size: 11px;">{{ inc.ip_address }}{% if inc.port %}:{{ inc.port }}{% endif %}</div>
+                            </td>
+                            <td style="font-size: 11.5px;">
+                                <span class="badge badge-neutral mono">{{ inc.fault_category }}</span>
+                            </td>
+                            <td style="font-size: 11.5px;">
+                                {% if inc.fault_localization %}
+                                    <span class="badge badge-neutral" style="border: 1px solid var(--border-subtle); display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px;">
+                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <circle cx="12" cy="12" r="10"></circle>
+                                            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                                        </svg>
+                                        {{ inc.fault_localization.layer.split('(')[0].strip() }}
+                                    </span>
+                                    <div class="mono text-muted" style="font-size: 10px; margin-top: 2px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ inc.fault_localization.localized_boundary }}">
+                                        {{ inc.fault_localization.localized_boundary }}
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if inc.severity == 'CRITICAL' %}
+                                    <span class="badge badge-down">CRITICAL</span>
+                                {% elif inc.severity == 'HIGH' %}
+                                    <span class="badge badge-fault">HIGH</span>
+                                {% elif inc.severity == 'WARNING' %}
+                                    <span class="badge badge-neutral" style="background: #fef08a; color: #854d0e;">WARNING</span>
+                                {% else %}
+                                    <span class="badge badge-up">INFO</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if inc.incident_status == 'OPEN' %}
+                                    <span class="badge badge-down" style="animation: pulse 2s infinite;">OPEN</span>
+                                {% else %}
+                                    <span class="badge badge-up">RESOLVED</span>
+                                {% endif %}
+                            </td>
+                            <td style="font-size: 11.5px; font-weight: 600;">
+                                {{ inc.confidence_level or 'Medium' }}
+                            </td>
+                            <td class="mono text-muted" style="font-size: 11px;">
+                                {{ inc.first_detected_at }}
+                            </td>
+                            <td class="mono text-muted" style="font-size: 11px;">
+                                {% if inc.recovered_at %}
+                                    <span style="color: #16a34a;">{{ inc.recovered_at }}</span>
+                                {% else %}
+                                    <span style="color: #dc2626;">Ongoing</span>
+                                {% endif %}
+                            </td>
+                            <td style="font-size: 12px; color: var(--text-secondary); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ inc.probable_cause }}">
+                                {{ inc.probable_cause or 'Under investigation' }}
+                            </td>
+                            <td style="text-align: right;">
+                                <button class="btn btn-sm btn-outline" onclick="openIncidentModal('{{ inc.id }}')" style="padding: 4px 10px; font-size: 11.5px;">
+                                    View Diagnosis
+                                </button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Section 2: Active Fault Breakdown Table -->
+<div id="section-breakdown" class="card" style="display: none;">
+    <div class="card-header">
+        <span class="card-title">Active Fault Summary Across Monitored Targets</span>
+    </div>
     <div class="table-responsive">
         <table class="data-table">
             <thead>
@@ -113,9 +260,9 @@
                             </td>
                             <td>
                                 {% if r.fault_status == 'FAULT' %}
-                                    <span class="badge badge-fault">▲ FAULT</span>
+                                    <span class="badge badge-fault">FAULT</span>
                                 {% else %}
-                                    <span class="badge badge-down">✕ DOWN</span>
+                                    <span class="badge badge-down">DOWN</span>
                                 {% endif %}
                             </td>
                             <td class="mono" style="text-align: center;">
@@ -144,4 +291,278 @@
         </table>
     </div>
 </div>
+
+<!-- Section 3: Hop-by-Hop Fault Localization Engine -->
+<div id="section-localization" class="card" style="display: none;">
+    <div class="card-header">
+        <div>
+            <span class="card-title">Hop-by-Hop Fault Localization Engine</span>
+            <div class="text-muted" style="font-size: 11.5px; margin-top: 2px;">
+                Layer 3 intermediate hop path tracing, gateway isolation, and router latency analysis.
+            </div>
+        </div>
+    </div>
+    <div style="padding: 20px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px;">
+            <div style="background: var(--surface-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--brand-accent);">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    <strong style="font-size: 13.5px; color: var(--text-heading);">Router Probe Deprioritization Rule</strong>
+                </div>
+                <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin: 0;">
+                    An intermediate traceroute hop timeout does <strong>not</strong> mean the router has failed. Transit routers frequently deprioritize or drop ICMP TTL-exceeded packets while continuing to forward customer data plane traffic. The target destination is only marked unreachable if subsequent hops also fail.
+                </p>
+            </div>
+
+            <div style="background: var(--surface-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #d97706;">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <strong style="font-size: 13.5px; color: var(--text-heading);">Persistent Latency Spike Rule</strong>
+                </div>
+                <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin: 0;">
+                    When latency spikes at one intermediate hop and remains elevated across all subsequent downstream hops, NetFault classifies this as a confirmed transit bottleneck rather than host-level degradation.
+                </p>
+            </div>
+
+            <div style="background: var(--surface-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #dc2626;">
+                        <rect x="2" y="2" width="20" height="8" rx="2"></rect>
+                        <rect x="2" y="14" width="20" height="8" rx="2"></rect>
+                        <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                        <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                    </svg>
+                    <strong style="font-size: 13.5px; color: var(--text-heading);">Shared Subnet & Gateway Correlation</strong>
+                </div>
+                <p style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin: 0;">
+                    If multiple devices sharing a /24 subnet or default gateway become unreachable concurrently, the failure is localized to the common upstream router or switch, suppressing duplicate individual device failure notifications.
+                </p>
+            </div>
+        </div>
+
+        <div style="border-top: 1px solid var(--border-subtle); padding-top: 18px;">
+            <div style="font-size: 13px; font-weight: 700; color: var(--text-heading); margin-bottom: 8px;">
+                Run Interactive Route Trace on Registered Devices
+            </div>
+            <p style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 14px;">
+                Select any monitored device to open its dedicated Hop-by-Hop Route Trace inspection panel:
+            </p>
+            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                {% for d in devices %}
+                    <a href="{{ url_for('device_details', device_id=d.id) }}#traceroute-section" class="btn btn-sm btn-outline" style="display: inline-flex; align-items: center; gap: 6px;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                        </svg>
+                        <span>{{ d.device_name }} ({{ d.ip_address }})</span>
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Incident Diagnostic Evidence & Fault Localization Trail -->
+<div id="incident-modal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
+    <div style="background: #ffffff; width: 90%; max-width: 720px; max-height: 88vh; border-radius: 12px; overflow-y: auto; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); border: 1px solid var(--border-subtle); display: flex; flex-direction: column;">
+        <div style="padding: 20px 24px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; background: var(--surface-subtle);">
+            <div>
+                <span id="modal-incident-id" class="mono" style="font-size: 13px; font-weight: 700; color: var(--brand-accent);"></span>
+                <h3 id="modal-device-title" style="margin: 2px 0 0 0; font-size: 17px; color: var(--text-heading);"></h3>
+            </div>
+            <button onclick="closeIncidentModal()" class="btn btn-sm btn-outline" style="padding: 4px 10px; font-size: 16px; border: none; cursor: pointer;">&times;</button>
+        </div>
+
+        <div style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="modal-badges"></div>
+
+            <!-- Prominent Fault Localization Card with Network Path Topology -->
+            <div style="background: var(--surface-subtle); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-heading); display: flex; align-items: center; gap: 6px;">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--brand-accent);">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+                        </svg>
+                        Fault Localization & Failure Boundary
+                    </div>
+                    <span id="modal-loc-observation-type" class="badge badge-neutral" style="font-size: 11px; font-weight: 700;"></span>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Localized OSI Layer:</div>
+                        <div id="modal-loc-layer" style="font-size: 13px; font-weight: 600; color: var(--text-heading); margin-top: 2px;"></div>
+                    </div>
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Localized Component Boundary:</div>
+                        <div id="modal-loc-boundary" class="mono" style="font-size: 12px; font-weight: 600; color: #b91c1c; margin-top: 2px;"></div>
+                    </div>
+                </div>
+
+                <div id="modal-loc-summary" style="font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 12px; padding: 8px 12px; background: #ffffff; border-radius: 6px; border: 1px solid var(--border-subtle);"></div>
+
+                <!-- Visual Network Path Topology Pipeline -->
+                <div style="border-top: 1px solid var(--border-subtle); padding-top: 10px;">
+                    <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px;">Network Path Localization Topology:</div>
+                    <div id="modal-loc-path-flow" style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px;"></div>
+                </div>
+            </div>
+
+            <div style="padding: 14px; background: var(--surface-subtle); border-radius: 8px; border-left: 4px solid var(--brand-accent);">
+                <div style="font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 4px;">Probable Root Cause</div>
+                <div id="modal-probable-cause" style="font-size: 13.5px; color: var(--text-heading); line-height: 1.5;"></div>
+            </div>
+
+            <div style="padding: 14px; background: #eff6ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                <div style="font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #1d4ed8; margin-bottom: 4px;">Recommended Action</div>
+                <div id="modal-recommended-action" style="font-size: 13px; color: #1e3a8a; line-height: 1.5;"></div>
+            </div>
+
+            <div>
+                <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px;">Supporting Evidence Trail</div>
+                <ul id="modal-evidence-list" style="margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.5; color: var(--text-secondary);"></ul>
+            </div>
+
+            <div>
+                <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px;">Email Notification Delivery Log</div>
+                <div id="modal-notification-log" style="font-size: 12.5px; color: var(--text-secondary);"></div>
+            </div>
+        </div>
+
+        <div style="padding: 14px 24px; border-top: 1px solid var(--border-subtle); background: var(--surface-subtle); text-align: right;">
+            <button onclick="closeIncidentModal()" class="btn btn-outline btn-sm">Close</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function switchFaultTab(tab) {
+    const secInc = document.getElementById('section-incidents');
+    const secBrk = document.getElementById('section-breakdown');
+    const secLoc = document.getElementById('section-localization');
+    const btnInc = document.getElementById('tab-btn-incidents');
+    const btnBrk = document.getElementById('tab-btn-breakdown');
+    const btnLoc = document.getElementById('tab-btn-localization');
+
+    secInc.style.display = tab === 'incidents' ? 'block' : 'none';
+    secBrk.style.display = tab === 'breakdown' ? 'block' : 'none';
+    secLoc.style.display = tab === 'localization' ? 'block' : 'none';
+
+    btnInc.className = tab === 'incidents' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline';
+    btnBrk.className = tab === 'breakdown' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline';
+    btnLoc.className = tab === 'localization' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline';
+}
+
+async function openIncidentModal(incidentId) {
+    const modal = document.getElementById('incident-modal');
+    modal.style.display = 'flex';
+    document.getElementById('modal-probable-cause').textContent = 'Loading diagnostic telemetry...';
+
+    try {
+        const resp = await fetch(`/api/incidents/${incidentId}`);
+        const data = await resp.json();
+        if (data.success && data.incident) {
+            const inc = data.incident;
+            document.getElementById('modal-incident-id').textContent = inc.incident_id || inc.id;
+            document.getElementById('modal-device-title').textContent = `${inc.device_name} (${inc.ip_address}${inc.port ? ':' + inc.port : ''})`;
+            document.getElementById('modal-probable-cause').textContent = inc.probable_cause || 'Under investigation';
+            document.getElementById('modal-recommended-action').textContent = inc.recommended_action || 'Inspect device network configuration.';
+
+            const badges = document.getElementById('modal-badges');
+            badges.innerHTML = `
+                <span class="badge ${inc.incident_status === 'OPEN' ? 'badge-down' : 'badge-up'}">${inc.incident_status}</span>
+                <span class="badge ${inc.severity === 'CRITICAL' ? 'badge-down' : 'badge-fault'}">${inc.severity}</span>
+                <span class="badge badge-neutral">${inc.fault_category}</span>
+                <span class="badge badge-neutral">Confidence: ${inc.confidence_level || 'Medium'}</span>
+            `;
+
+            // Populate Fault Localization details
+            const loc = inc.fault_localization || {};
+            document.getElementById('modal-loc-layer').textContent = loc.layer || 'Layer 3 (Network)';
+            document.getElementById('modal-loc-boundary').textContent = loc.localized_boundary || `${inc.device_name} (${inc.ip_address})`;
+            document.getElementById('modal-loc-observation-type').textContent = loc.observation_type || 'Confirmed Observation';
+            document.getElementById('modal-loc-summary').textContent = loc.summary || inc.probable_cause || 'Failure localized via multi-probe analysis.';
+
+            // Render Network Path Topology Flow
+            const flowContainer = document.getElementById('modal-loc-path-flow');
+            flowContainer.innerHTML = '';
+            const pathNodes = loc.path || [
+                { name: 'NetFault Station', status: 'OK' },
+                { name: 'Default Gateway', status: 'OK' },
+                { name: inc.device_name, status: inc.incident_status === 'OPEN' ? 'FAULT' : 'OK' }
+            ];
+
+            pathNodes.forEach((node, idx) => {
+                const nodeDiv = document.createElement('div');
+                let bg = '#f0fdf4', color = '#166534', border = '#bbf7d0';
+                if (node.status === 'DOWN' || node.status === 'FAULT') {
+                    bg = '#fef2f2'; color = '#991b1b'; border = '#fecaca';
+                } else if (node.status === 'WARNING' || node.status === 'UNREACHABLE') {
+                    bg = '#fffbeb'; color = '#92400e'; border = '#fde68a';
+                }
+                nodeDiv.style.cssText = `padding: 4px 10px; background: ${bg}; color: ${color}; border: 1px solid ${border}; border-radius: 6px; font-size: 11.5px; font-weight: 600;`;
+                nodeDiv.innerHTML = `<span>${node.name}</span><div style="font-size: 10px; font-weight: 400; opacity: 0.85;">${node.desc || node.status}</div>`;
+                flowContainer.appendChild(nodeDiv);
+
+                if (idx < pathNodes.length - 1) {
+                    const arrow = document.createElement('span');
+                    arrow.style.cssText = 'color: var(--text-muted); font-size: 12px; font-weight: bold;';
+                    arrow.innerHTML = '&rarr;';
+                    flowContainer.appendChild(arrow);
+                }
+            });
+
+            const evList = document.getElementById('modal-evidence-list');
+            evList.innerHTML = '';
+            let evArr = inc.evidence || [];
+            if (typeof evArr === 'string') {
+                try { evArr = JSON.parse(evArr); } catch(e) { evArr = [evArr]; }
+            }
+            if (evArr.length === 0) {
+                evList.innerHTML = '<li>No concrete evidence points recorded for this incident.</li>';
+            } else {
+                evArr.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item;
+                    li.style.marginBottom = '4px';
+                    evList.appendChild(li);
+                });
+            }
+
+            const notifLog = document.getElementById('modal-notification-log');
+            const notifs = data.notifications || [];
+            if (notifs.length === 0) {
+                notifLog.innerHTML = '<span class="text-muted">No external email dispatches logged for this incident.</span>';
+            } else {
+                let html = '<ul style="margin: 0; padding-left: 20px;">';
+                notifs.forEach(n => {
+                    const statusColor = n.delivery_status === 'SENT' ? '#16a34a' : '#dc2626';
+                    html += `<li style="margin-bottom: 4px;"><strong>${n.notification_type}</strong> to <code>${n.recipient_email}</code> &bull; <span style="color: ${statusColor}; font-weight: 700;">${n.delivery_status}</span> at <span class="mono">${n.attempted_at}</span>${n.error_message ? ' (' + n.error_message + ')' : ''}</li>`;
+                });
+                html += '</ul>';
+                notifLog.innerHTML = html;
+            }
+        }
+    } catch (e) {
+        document.getElementById('modal-probable-cause').textContent = 'Failed to load incident details: ' + e.message;
+    }
+}
+
+function closeIncidentModal() {
+    document.getElementById('incident-modal').style.display = 'none';
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeIncidentModal();
+});
+</script>
 {% endblock %}
+

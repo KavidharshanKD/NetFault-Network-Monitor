@@ -37,10 +37,10 @@
 
             <select name="status" class="filter-input">
                 <option value="ALL" {% if status_filter == 'ALL' %}selected{% endif %}>All Operational States</option>
-                <option value="UP" {% if status_filter == 'UP' %}selected{% endif %}>● UP (Operational)</option>
-                <option value="FAULT" {% if status_filter == 'FAULT' %}selected{% endif %}>▲ FAULT (Service Down)</option>
-                <option value="DOWN" {% if status_filter == 'DOWN' %}selected{% endif %}>✕ DOWN (Unreachable)</option>
-                <option value="UNKNOWN" {% if status_filter == 'UNKNOWN' %}selected{% endif %}>○ UNKNOWN / Unchecked</option>
+                <option value="UP" {% if status_filter == 'UP' %}selected{% endif %}>UP (Operational)</option>
+                <option value="FAULT" {% if status_filter == 'FAULT' %}selected{% endif %}>FAULT (Service Down)</option>
+                <option value="DOWN" {% if status_filter == 'DOWN' %}selected{% endif %}>DOWN (Unreachable)</option>
+                <option value="UNKNOWN" {% if status_filter == 'UNKNOWN' %}selected{% endif %}>UNKNOWN / Unchecked</option>
             </select>
 
             <select name="sort" class="filter-input">
@@ -143,13 +143,13 @@
                             </td>
                             <td>
                                 {% if dev.overall_status == 'UP' %}
-                                    <span class="badge badge-up">● UP</span>
+                                    <span class="badge badge-up">UP</span>
                                 {% elif dev.overall_status == 'FAULT' %}
-                                    <span class="badge badge-fault">▲ FAULT</span>
+                                    <span class="badge badge-fault">FAULT</span>
                                 {% elif dev.overall_status == 'DOWN' %}
-                                    <span class="badge badge-down">✕ DOWN</span>
+                                    <span class="badge badge-down">DOWN</span>
                                 {% else %}
-                                    <span class="badge badge-neutral">○ UNCHECKED</span>
+                                    <span class="badge badge-neutral">UNCHECKED</span>
                                 {% endif %}
                             </td>
                             <td class="mono">
@@ -177,7 +177,7 @@
                                     <a href="{{ url_for('device_details', device_id=dev.id) }}" class="btn btn-sm btn-outline">
                                         View
                                     </a>
-                                    <button class="btn btn-sm btn-outline" onclick="checkDeviceFromInventory({{ dev.id }})" id="check-btn-{{ dev.id }}">
+                                    <button class="btn btn-sm btn-outline" onclick="checkDeviceFromInventory('{{ dev.id }}')" id="check-btn-{{ dev.id }}">
                                         Check
                                     </button>
                                     <a href="{{ url_for('edit_device', device_id=dev.id) }}" class="btn btn-sm btn-outline">

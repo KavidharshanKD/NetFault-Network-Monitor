@@ -6,7 +6,7 @@
 {% block content %}
 <div class="form-card">
     <div class="card-header">
-        <span class="card-title">Modify Device Configuration: #{{ device.id }}</span>
+        <span class="card-title">Modify Device Configuration: {{ device.device_name }}</span>
     </div>
 
     <form method="POST" action="{{ url_for('edit_device', device_id=device.id) }}">

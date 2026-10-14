@@ -38,6 +38,28 @@
     </div>
 </div>
 
+{% if not supabase_configured %}
+<div class="alert alert-warning" style="margin-bottom: 24px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: var(--radius-md); padding: 16px 20px;">
+    <div style="display: flex; align-items: flex-start; gap: 14px;">
+        <div style="width: 32px; height: 32px; border-radius: 8px; background: #fef3c7; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #b45309;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+        </div>
+        <div>
+            <strong style="font-size: 14px; font-weight: 600;">Supabase Database Connection Required</strong>
+            <p style="margin-top: 4px; font-size: 13px; line-height: 1.5; color: #78350f;">
+                The application has been successfully migrated to Supabase PostgreSQL, but placeholder credentials are currently detected in your <code>.env</code> file. 
+                To persist devices, monitoring logs, and diagnostics, paste your real <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code> into <code>.env</code>.
+                Check the <a href="{{ url_for('system_view') }}" style="color: #b45309; font-weight: 600; text-decoration: underline;">System Information</a> page for setup status.
+            </p>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- 5 Summary Metric Cards -->
 <div class="summary-grid">
     <div class="metric-card">
@@ -185,9 +207,9 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                             <strong style="font-size: 13px;">{{ f.device_name }}</strong>
                             {% if f.overall_status == 'FAULT' %}
-                                <span class="badge badge-fault">▲ FAULT</span>
+                                <span class="badge badge-fault">FAULT</span>
                             {% else %}
-                                <span class="badge badge-down">✕ DOWN</span>
+                                <span class="badge badge-down">DOWN</span>
                             {% endif %}
                         </div>
                         <div class="mono text-muted" style="font-size: 11px;">
@@ -295,13 +317,13 @@
                             </td>
                             <td>
                                 {% if d.overall_status == 'UP' %}
-                                    <span class="badge badge-up">● UP</span>
+                                    <span class="badge badge-up">UP</span>
                                 {% elif d.overall_status == 'FAULT' %}
-                                    <span class="badge badge-fault">▲ FAULT</span>
+                                    <span class="badge badge-fault">FAULT</span>
                                 {% elif d.overall_status == 'DOWN' %}
-                                    <span class="badge badge-down">✕ DOWN</span>
+                                    <span class="badge badge-down">DOWN</span>
                                 {% else %}
-                                    <span class="badge badge-neutral">○ UNCHECKED</span>
+                                    <span class="badge badge-neutral">UNCHECKED</span>
                                 {% endif %}
                             </td>
                             <td class="mono">
@@ -319,7 +341,7 @@
                                     <a href="{{ url_for('device_details', device_id=d.id) }}" class="btn btn-sm btn-outline" title="View Diagnostics">
                                         View
                                     </a>
-                                    <button class="btn btn-sm btn-outline" onclick="checkSingleDevice({{ d.id }})" id="check-btn-{{ d.id }}" title="Run immediate probe">
+                                    <button class="btn btn-sm btn-outline" onclick="checkSingleDevice('{{ d.id }}')" id="check-btn-{{ d.id }}" title="Run immediate probe">
                                         Check Now
                                     </button>
                                     <a href="{{ url_for('edit_device', device_id=d.id) }}" class="btn btn-sm btn-outline" title="Edit Parameters">

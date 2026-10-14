@@ -1,7 +1,7 @@
 """
-Background Scheduler Module for Automated Fault Detection System.
+Background Scheduler Module for Automated Fault Detection System (AFDS).
 Provides thread-safe periodic network monitoring, bounded concurrent execution,
-on-demand single/batch device checks, and start/stop lifecycle management.
+on-demand single/batch device checks, and Supabase persistent audit recording.
 """
 
 import time
@@ -11,13 +11,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from config import Config
 import database
 import monitoring
+import fault_diagnosis
+import notifications
 
 logger = logging.getLogger(__name__)
 
 class MonitoringScheduler:
     """
     Thread-safe Background Worker that periodically audits registered devices
-    using bounded thread concurrency.
+    using bounded thread concurrency, performs intelligent fault diagnosis,
+    and dispatches immediate email notifications upon incident detection or recovery.
     """
     def __init__(self):
         self._thread = None
@@ -29,10 +32,11 @@ class MonitoringScheduler:
         self._last_cycle_time = None
 
     def _get_device_lock(self, device_id):
+        dev_key = str(device_id)
         with self._global_device_lock:
-            if device_id not in self._device_locks:
-                self._device_locks[device_id] = threading.Lock()
-            return self._device_locks[device_id]
+            if dev_key not in self._device_locks:
+                self._device_locks[dev_key] = threading.Lock()
+            return self._device_locks[dev_key]
 
     def is_running(self):
         """Returns True if periodic monitoring worker is running."""
@@ -45,8 +49,11 @@ class MonitoringScheduler:
 
     def check_single_device(self, device_id):
         """
-        Executes a monitoring check for a single device immediately.
-        Persists result in SQLite and returns the result dictionary.
+        Executes a monitoring check for a single device immediately:
+        1. Runs ICMP/TCP probes.
+        2. Persists audit record to Supabase.
+        3. Runs intelligent multi-layer fault diagnosis.
+        4. Triggers immediate email notifications for new faults or recovery.
         """
         device = database.get_device_by_id(device_id)
         if not device:
@@ -61,27 +68,62 @@ class MonitoringScheduler:
         try:
             settings = database.get_settings()
             result = monitoring.check_device_connectivity(device, settings)
-            database.record_monitoring_result(
-                device_id=device_id,
-                reachability_status=result['reachability_status'],
-                service_status=result['service_status'],
-                overall_status=result['overall_status'],
-                response_time_ms=result['response_time_ms'],
-                fault_category=result.get('fault_category'),
-                fault_details=result['fault_details']
-            )
+            try:
+                database.record_monitoring_result(
+                    device_id=device['id'],
+                    reachability_status=result['reachability_status'],
+                    service_status=result['service_status'],
+                    overall_status=result['overall_status'],
+                    response_time_ms=result['response_time_ms'],
+                    fault_category=result.get('fault_category'),
+                    fault_details=result['fault_details']
+                )
+            except Exception as db_err:
+                logger.error(f"Failed to persist monitoring check to Supabase for device {device_id}: {db_err}")
+
+            # Intelligent Fault Diagnosis & Immediate Email Notifications
+            try:
+                dev_hist = database.get_device_history(device['id'], limit=10)
+                dev_traces = database.get_device_traceroutes(device['id'], limit=2)
+                peers = database.get_all_devices(user_id=device.get('user_id'))
+                
+                diagnosis = fault_diagnosis.diagnose_check(
+                    device=device,
+                    current_check=result,
+                    history=dev_hist,
+                    traceroutes=dev_traces,
+                    peer_devices=peers,
+                    settings=settings
+                )
+                result['diagnosis'] = diagnosis
+
+                # Immediately handle incident creation, persistence, and email dispatch
+                incident = notifications.handle_incident_notifications(
+                    device=device,
+                    diagnosis=diagnosis,
+                    current_check=result
+                )
+                if incident:
+                    result['incident'] = incident
+
+            except Exception as diag_err:
+                logger.error(f"Error executing intelligent diagnosis / notification for device {device_id}: {diag_err}")
+
             return result
         except Exception as e:
             logger.error(f"Error during check of device {device_id}: {e}")
-            database.record_monitoring_result(
-                device_id=device_id,
-                reachability_status="ERROR",
-                service_status="ERROR",
-                overall_status="DOWN",
-                response_time_ms=None,
-                fault_category="GENERAL_FAILURE",
-                fault_details=f"Monitoring execution error: {str(e)}"
-            )
+            try:
+                database.record_monitoring_result(
+                    device_id=device['id'],
+                    reachability_status="ERROR",
+                    service_status="ERROR",
+                    overall_status="DOWN",
+                    response_time_ms=None,
+                    fault_category="GENERAL_FAILURE",
+                    fault_details=f"Monitoring execution error: {str(e)}"
+                )
+            except Exception as db_err:
+                logger.error(f"Failed to record failure status to Supabase: {db_err}")
             return None
         finally:
             dev_lock.release()
@@ -91,9 +133,14 @@ class MonitoringScheduler:
         Executes checks across devices using a bounded thread pool.
         Catches device-specific errors so one device does not block others.
         """
-        devices = database.get_all_devices()
+        try:
+            devices = database.get_all_devices()
+        except Exception as e:
+            logger.error(f"Error retrieving devices for scheduled check: {e}")
+            return []
+
         if only_enabled:
-            devices = [d for d in devices if d.get('monitoring_enabled', 1) == 1]
+            devices = [d for d in devices if bool(d.get('monitoring_enabled', True))]
 
         if not devices:
             self._last_cycle_time = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -126,7 +173,7 @@ class MonitoringScheduler:
         while not self._stop_event.is_set():
             try:
                 settings = database.get_settings()
-                if settings.get('auto_monitoring', 1) == 1:
+                if bool(settings.get('auto_monitoring', 1)):
                     self.check_all_devices(only_enabled=True)
             except Exception as e:
                 logger.error(f"Unexpected error in scheduler loop: {e}")

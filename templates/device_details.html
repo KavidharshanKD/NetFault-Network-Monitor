@@ -10,7 +10,7 @@
         <p class="mono text-muted">{{ device.ip_address }}{% if device.port %}:{{ device.port }}{% endif %} &bull; Registered {{ device.created_at }}</p>
     </div>
     <div class="hero-actions">
-        <button class="btn btn-primary" onclick="triggerDeviceCheck({{ device.id }})" id="details-check-btn">
+        <button class="btn btn-primary" onclick="triggerDeviceCheck('{{ device.id }}')" id="details-check-btn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="23 4 23 10 17 10"></polyline>
                 <polyline points="1 20 1 14 7 14"></polyline>
@@ -27,19 +27,66 @@
     </div>
 </div>
 
+{% if active_incident %}
+<!-- Active Incident Diagnostic Assessment Banner -->
+<div class="card" style="margin-bottom: 20px; border-left: 5px solid {% if active_incident.severity == 'CRITICAL' %}#ef4444{% elif active_incident.severity == 'HIGH' %}#f97316{% else %}#eab308{% endif %}; background: #fff;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;">
+        <div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <span class="badge {% if active_incident.severity == 'CRITICAL' %}badge-down{% else %}badge-fault{% endif %}">
+                    {{ active_incident.severity }} INCIDENT &bull; {{ active_incident.fault_category }}
+                </span>
+                <span class="mono text-muted" style="font-size: 12px; font-weight: 600;">{{ active_incident.incident_id }}</span>
+                <span class="badge badge-neutral" style="font-size: 11px;">Confidence: {{ active_incident.confidence_level or 'Medium' }}</span>
+            </div>
+            <h3 style="margin: 0 0 8px 0; font-size: 16px; color: var(--text-heading);">
+                {{ active_incident.diagnostic_summary or 'Active Network Incident Detected' }}
+            </h3>
+        </div>
+        <div style="text-align: right; font-size: 11.5px; color: var(--text-muted);" class="mono">
+            <div>Detected: {{ active_incident.first_detected_at }}</div>
+            <div>Observed: {{ active_incident.last_observed_at }}</div>
+        </div>
+    </div>
+
+    <div style="margin-top: 12px; padding: 12px 14px; background: var(--surface-subtle); border-radius: 6px; font-size: 13px;">
+        <strong style="color: var(--text-heading); display: block; margin-bottom: 4px;">Probable Cause:</strong>
+        <span style="color: var(--text-primary);">{{ active_incident.probable_cause or 'Under investigation' }}</span>
+    </div>
+
+    {% if active_incident.recommended_action %}
+    <div style="margin-top: 10px; padding: 12px 14px; background: #eff6ff; border-radius: 6px; font-size: 13px; color: #1e3a8a; border: 1px solid #bfdbfe;">
+        <strong>Recommended Action:</strong> {{ active_incident.recommended_action }}
+    </div>
+    {% endif %}
+
+    {% if active_incident.evidence %}
+    <div style="margin-top: 12px;">
+        <strong style="font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Diagnostic Evidence:</strong>
+        <ul style="margin: 6px 0 0 0; padding-left: 20px; font-size: 12.5px; color: var(--text-secondary);">
+            {% set ev_items = active_incident.evidence if active_incident.evidence is iterable and active_incident.evidence is not string else [active_incident.evidence] %}
+            {% for ev in ev_items %}
+                <li style="margin-bottom: 3px;">{{ ev }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 <!-- Diagnostics Grid -->
 <div class="summary-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 20px;">
     <div class="metric-card">
         <div class="metric-label">Overall Status</div>
         <div style="margin-top: 8px;">
             {% if device.overall_status == 'UP' %}
-                <span class="badge badge-up" style="font-size: 14px; padding: 4px 10px;">● UP</span>
+                <span class="badge badge-up" style="font-size: 14px; padding: 4px 10px;">UP</span>
             {% elif device.overall_status == 'FAULT' %}
-                <span class="badge badge-fault" style="font-size: 14px; padding: 4px 10px;">▲ FAULT</span>
+                <span class="badge badge-fault" style="font-size: 14px; padding: 4px 10px;">FAULT</span>
             {% elif device.overall_status == 'DOWN' %}
-                <span class="badge badge-down" style="font-size: 14px; padding: 4px 10px;">✕ DOWN</span>
+                <span class="badge badge-down" style="font-size: 14px; padding: 4px 10px;">DOWN</span>
             {% else %}
-                <span class="badge badge-neutral" style="font-size: 14px; padding: 4px 10px;">○ UNCHECKED</span>
+                <span class="badge badge-neutral" style="font-size: 14px; padding: 4px 10px;">UNCHECKED</span>
             {% endif %}
         </div>
         <div class="metric-unit" style="margin-top: 8px;">Operational health</div>
@@ -147,7 +194,7 @@
             </div>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
-            <button class="btn btn-sm btn-primary" id="btn-run-traceroute" onclick="triggerTraceroute({{ device.id }})" title="Trace path from server to {{ device.ip_address }}">
+            <button class="btn btn-sm btn-primary" id="btn-run-traceroute" onclick="triggerTraceroute('{{ device.id }}')" title="Trace path from server to {{ device.ip_address }}">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
@@ -169,8 +216,14 @@
             {% set latest_trace = traceroutes[0] %}
             <!-- Diagnostic Assessment Banner -->
             <div class="trace-diagnosis-box {% if latest_trace.destination_reached %}success{% elif latest_trace.fault_hop %}fault{% else %}down{% endif %}">
-                <div style="font-size: 18px; line-height: 1;">
-                    {% if latest_trace.destination_reached %}✅{% elif latest_trace.fault_hop %}⚠️{% else %}❌{% endif %}
+                <div style="font-size: 18px; line-height: 1; display: flex; align-items: center;">
+                    {% if latest_trace.destination_reached %}
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--success);"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    {% elif latest_trace.fault_hop %}
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--warning);"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    {% else %}
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--danger);"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                    {% endif %}
                 </div>
                 <div style="flex: 1;">
                     <strong style="display: block; margin-bottom: 2px;">
@@ -375,11 +428,11 @@
                             </td>
                             <td>
                                 {% if h.overall_status == 'UP' %}
-                                    <span class="badge badge-up">● UP</span>
+                                    <span class="badge badge-up">UP</span>
                                 {% elif h.overall_status == 'FAULT' %}
-                                    <span class="badge badge-fault">▲ FAULT</span>
+                                    <span class="badge badge-fault">FAULT</span>
                                 {% elif h.overall_status == 'DOWN' %}
-                                    <span class="badge badge-down">✕ DOWN</span>
+                                    <span class="badge badge-down">DOWN</span>
                                 {% else %}
                                     <span class="badge badge-neutral">{{ h.overall_status }}</span>
                                 {% endif %}

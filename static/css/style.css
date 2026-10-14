@@ -5,79 +5,80 @@
    ========================================================================== */
 
 :root {
-    /* Base Color Tokens */
-    --canvas-bg: #f8fafc;
-    --canvas-gradient: radial-gradient(circle at 15% 15%, rgba(239, 246, 255, 0.8) 0%, transparent 45%),
-                       radial-gradient(circle at 85% 10%, rgba(240, 253, 250, 0.7) 0%, transparent 40%),
-                       #f8fafc;
-    --surface-card: #ffffff;
-    --surface-hover: #f8fafc;
-    --surface-subtle: #f1f5f9;
-    --surface-sidebar: #ffffff;
-    --surface-glass: rgba(255, 255, 255, 0.88);
+    /* Base Color Tokens — Modern Light Beige / Warm Linen Palette */
+    --canvas-bg: #f6f3ed;
+    --canvas-gradient: radial-gradient(circle at 12% 16%, rgba(254, 252, 248, 0.95) 0%, transparent 45%),
+                       radial-gradient(circle at 88% 12%, rgba(243, 236, 224, 0.85) 0%, transparent 40%),
+                       #f6f3ed;
+    --surface-card: #fdfbf7;       /* Warm ivory / eggshell (not pure white) */
+    --surface-hover: #f4eee2;      /* Gentle warm hover */
+    --surface-subtle: #eee7d9;     /* Subtle warm beige */
+    --surface-sidebar: #faf7f2;    /* Warm beige sidebar */
+    --surface-glass: rgba(250, 247, 242, 0.92);
 
-    /* Typography Color Hierarchy */
-    --text-primary: #0f172a;       /* Slate 900 - high contrast headline */
-    --text-secondary: #334155;     /* Slate 700 - readable body text */
-    --text-muted: #64748b;         /* Slate 500 - captions and secondary */
-    --text-subtle: #94a3b8;        /* Slate 400 - placeholders and hints */
+    /* Typography Color Hierarchy (Warm Stone & Espresso Tones) */
+    --text-primary: #1c1917;       /* Rich Espresso Stone 900 - high contrast headline */
+    --text-secondary: #44403c;     /* Stone 700 - warm readable body text */
+    --text-muted: #78716c;         /* Stone 500 - captions and secondary */
+    --text-subtle: #a8a29e;        /* Stone 400 - placeholders and hints */
     --text-inverse: #ffffff;
 
-    /* Hairline Structural Borders */
-    --border-light: #e2e8f0;       /* Slate 200 */
-    --border-card: rgba(226, 232, 240, 0.85);
-    --border-subtle: #cbd5e1;      /* Slate 300 */
-    --border-strong: #94a3b8;      /* Slate 400 */
-    --border-focus: #2563eb;       /* Blue 600 */
+    /* Hairline Structural Borders (Warm Sand / Linen) */
+    --border-light: #e6dfd3;       /* Warm Sand 200 */
+    --border-card: rgba(215, 204, 190, 0.85);
+    --border-subtle: #d6ccbd;      /* Sand 300 */
+    --border-strong: #a89e90;      /* Sand 400 */
+    --border-focus: #2563eb;       /* Royal Blue Focus */
 
-    /* Semantic Status Accents (Refined Light Palette) */
-    --status-up-bg: #ecfdf5;       /* Emerald 50 */
-    --status-up-text: #065f46;     /* Emerald 800 */
-    --status-up-border: #a7f3d0;   /* Emerald 200 */
-    --status-up-dot: #10b981;      /* Emerald 500 */
-    --status-up-glow: rgba(16, 185, 129, 0.4);
+    /* Semantic Status Accents (Harmonious with Light Beige) */
+    --status-up-bg: #ecfdf5;       /* Soft Emerald */
+    --status-up-text: #065f46;
+    --status-up-border: #a7f3d0;
+    --status-up-dot: #10b981;
+    --status-up-glow: rgba(16, 185, 129, 0.35);
 
-    --status-fault-bg: #fffbeb;    /* Amber 50 */
-    --status-fault-text: #92400e;  /* Amber 800 */
-    --status-fault-border: #fde68a;/* Amber 200 */
-    --status-fault-dot: #f59e0b;   /* Amber 500 */
-    --status-fault-glow: rgba(245, 158, 11, 0.4);
+    --status-fault-bg: #fffbeb;    /* Warm Amber */
+    --status-fault-text: #92400e;
+    --status-fault-border: #fde68a;
+    --status-fault-dot: #f59e0b;
+    --status-fault-glow: rgba(245, 158, 11, 0.35);
 
-    --status-down-bg: #fef2f2;     /* Rose 50 */
-    --status-down-text: #991b1b;   /* Rose 800 */
-    --status-down-border: #fecaca; /* Rose 200 */
-    --status-down-dot: #ef4444;    /* Rose 500 */
-    --status-down-glow: rgba(239, 68, 68, 0.4);
+    --status-down-bg: #fef2f2;     /* Soft Rose */
+    --status-down-text: #991b1b;
+    --status-down-border: #fecaca;
+    --status-down-dot: #ef4444;
+    --status-down-glow: rgba(239, 68, 68, 0.35);
 
-    --status-neutral-bg: #f8fafc;  /* Slate 50 */
-    --status-neutral-text: #475569;/* Slate 600 */
-    --status-neutral-border: #e2e8f0;
-    --status-neutral-dot: #94a3b8;
+    --status-neutral-bg: #f4eee2;  /* Light Sand */
+    --status-neutral-text: #574f44;
+    --status-neutral-border: #e6dfd3;
+    --status-neutral-dot: #a89e90;
 
     /* Brand & Accent Tokens */
-    --brand-primary: #0f172a;
+    --brand-primary: #1c1917;
     --brand-accent: #2563eb;       /* Royal Blue */
     --brand-accent-hover: #1d4ed8;
     --brand-accent-light: #eff6ff; /* Blue 50 */
     --brand-accent-border: #bfdbfe;
 
     /* Fonts */
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-    /* Geometry */
-    --radius-xs: 4px;
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
+    /* Geometry (Modern Bento Rounded Geometry) */
+    --radius-xs: 6px;
+    --radius-sm: 10px;
+    --radius-md: 16px;
+    --radius-lg: 22px;
+    --radius-xl: 28px;
     --radius-full: 9999px;
 
-    /* Multi-stop Shadows (Gentle, modern light depth) */
-    --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
-    --shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.03);
-    --shadow-card: 0 1px 3px 0 rgba(15, 23, 42, 0.03), 0 4px 16px -2px rgba(15, 23, 42, 0.04);
-    --shadow-card-hover: 0 10px 25px -4px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
-    --shadow-elevated: 0 14px 34px -4px rgba(15, 23, 42, 0.09), 0 4px 12px -2px rgba(15, 23, 42, 0.05);
+    /* Multi-stop Shadows (Gentle, warm depth) */
+    --shadow-xs: 0 1px 2px 0 rgba(28, 25, 23, 0.04);
+    --shadow-sm: 0 1px 3px 0 rgba(28, 25, 23, 0.05), 0 1px 2px -1px rgba(28, 25, 23, 0.03);
+    --shadow-card: 0 1px 3px 0 rgba(28, 25, 23, 0.03), 0 4px 16px -2px rgba(28, 25, 23, 0.04);
+    --shadow-card-hover: 0 10px 25px -4px rgba(28, 25, 23, 0.08), 0 2px 6px -1px rgba(28, 25, 23, 0.04);
+    --shadow-elevated: 0 14px 34px -4px rgba(28, 25, 23, 0.09), 0 4px 12px -2px rgba(28, 25, 23, 0.05);
     --shadow-btn-primary: 0 3px 12px 0 rgba(37, 99, 235, 0.28);
 
     /* Animation Constants */

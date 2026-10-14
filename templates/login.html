@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In &amp; Register — Automated Fault Detection System</title>
+    <!-- Modern Inter Font with System Fallbacks -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        /* --------------------------------------------------------------------------
+           Design System & Typography Tokens
+           -------------------------------------------------------------------------- */
+        :root {
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, Menlo, Monaco, Consolas, monospace;
+            
+            --bg-canvas: #fafafa;
+            --bg-card: #ffffff;
+            --border-subtle: #e4e4e7;
+            --border-hover: #d4d4d8;
+            --border-focus: #18181b;
+            
+            --text-heading: #09090b;
+            --text-body: #27272a;
+            --text-muted: #71717a;
+            --text-subtle: #a1a1aa;
+            --text-inverse: #ffffff;
+            
+            --accent-black: #09090b;
+            --accent-black-hover: #18181b;
+            --accent-blue: #2563eb;
+            --accent-error: #ef4444;
+            --accent-success: #10b981;
+            
+            --shadow-card: 0 20px 45px -12px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.12);
+            --shadow-btn: 0 4px 14px rgba(9, 9, 11, 0.16);
+            --transition-timing: cubic-bezier(0.77, 0, 0.175, 1);
+            --transition-duration: 0.65s;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-canvas);
+            background-image: 
+                radial-gradient(at 100% 0%, rgba(228, 228, 231, 0.4) 0px, transparent 50%),
+                radial-gradient(at 0% 100%, rgba(228, 228, 231, 0.4) 0px, transparent 50%),
+                linear-gradient(to right, rgba(0, 0, 0, 0.02) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0, 0, 0, 0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+            color: var(--text-body);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overflow-x: hidden;
+        }
+
+        /* --------------------------------------------------------------------------
+           Main Sliding Card Container
+           -------------------------------------------------------------------------- */
+        .auth-container {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 24px;
+            box-shadow: var(--shadow-card);
+            position: relative;
+            overflow: hidden;
+            width: 960px;
+            max-width: 100%;
+            min-height: 620px;
+            display: flex;
+        }
+
+        /* Mobile Top Navigation Tabs (Hidden on Desktop) */
+        .mobile-tabs-bar {
+            display: none;
+            width: 100%;
+            background: #f4f4f5;
+            padding: 6px;
+            border-bottom: 1px solid var(--border-subtle);
+            border-radius: 24px 24px 0 0;
+            gap: 6px;
+            position: relative;
+            z-index: 10;
+        }
+        .mobile-tab-btn {
+            flex: 1;
+            padding: 10px 14px;
+            font-size: 13.5px;
+            font-weight: 600;
+            font-family: var(--font-sans);
+            color: var(--text-muted);
+            background: transparent;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .mobile-tab-btn.active {
+            background: #ffffff;
+            color: var(--text-heading);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+        }
+
+        /* --------------------------------------------------------------------------
+           Form Containers (Sign In & Sign Up)
+           -------------------------------------------------------------------------- */
+        .form-panel {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            transition: all var(--transition-duration) var(--transition-timing);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 44px 52px;
+            width: 50%;
+            background: #ffffff;
+        }
+
+        .sign-in-panel {
+            left: 0;
+            width: 50%;
+            z-index: 2;
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .create-account-panel {
+            left: 0;
+            width: 50%;
+            opacity: 0;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Active sliding state: container.right-panel-active */
+        .auth-container.right-panel-active .sign-in-panel {
+            transform: translateX(100%);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .auth-container.right-panel-active .create-account-panel {
+            transform: translateX(100%);
+            opacity: 1;
+            z-index: 5;
+            pointer-events: auto;
+            animation: fadeInPanel 0.65s ease;
+        }
+
+        @keyframes fadeInPanel {
+            0%, 45% {
+                opacity: 0;
+                z-index: 1;
+            }
+            100% {
+                opacity: 1;
+                z-index: 5;
+            }
+        }
+
+        .auth-form-content {
+            width: 100%;
+            max-width: 380px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --------------------------------------------------------------------------
+           Form Headers & Typography
+           -------------------------------------------------------------------------- */
+        .brand-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 11.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+        .brand-badge-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--accent-black);
+        }
+
+        .form-heading {
+            font-size: 26px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: var(--text-heading);
+            line-height: 1.2;
+            margin-bottom: 8px;
+        }
+
+        .form-subtitle {
+            font-size: 13.5px;
+            color: var(--text-muted);
+            line-height: 1.45;
+            margin-bottom: 24px;
+        }
+
+        /* --------------------------------------------------------------------------
+           Modern Form Controls
+           -------------------------------------------------------------------------- */
+        .form-group {
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--text-heading);
+            margin-bottom: 6px;
+            letter-spacing: -0.01em;
+        }
+
+        .input-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 11.5px 14px;
+            font-family: var(--font-sans);
+            font-size: 13.5px;
+            color: var(--text-heading);
+            background-color: #ffffff;
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            outline: none;
+            transition: border-color 0.16s ease, box-shadow 0.16s ease;
+        }
+        .form-input::placeholder {
+            color: var(--text-subtle);
+        }
+        .form-input:focus {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px rgba(9, 9, 11, 0.08);
+        }
+        .form-input.has-toggle {
+            padding-right: 42px;
+        }
+
+        /* Show/Hide Password Eye Button */
+        .toggle-password-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            transition: color 0.15s ease;
+        }
+        .toggle-password-btn:hover {
+            color: var(--text-heading);
+        }
+
+        /* Inline Field Validation Error */
+        .field-error {
+            display: none;
+            font-size: 11.5px;
+            color: var(--accent-error);
+            font-weight: 500;
+            margin-top: 5px;
+        }
+        .field-error.visible {
+            display: block;
+        }
+
+        /* Form Row: Remember Me & Forgot Password */
+        .form-meta-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            font-size: 12.5px;
+        }
+
+        .remember-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+            font-weight: 500;
+            cursor: pointer;
+            user-select: none;
+        }
+        .remember-checkbox {
+            width: 15px;
+            height: 15px;
+            accent-color: var(--accent-black);
+            cursor: pointer;
+        }
+
+        .forgot-link {
+            color: var(--text-body);
+            font-weight: 600;
+            text-decoration: none;
+            transition: color 0.15s ease;
+        }
+        .forgot-link:hover {
+            color: var(--accent-black);
+            text-decoration: underline;
+        }
+
+        /* Primary Action Button */
+        .btn-submit-primary {
+            width: 100%;
+            padding: 12px 20px;
+            font-family: var(--font-sans);
+            font-size: 14px;
+            font-weight: 600;
+            color: #ffffff;
+            background: var(--accent-black);
+            border: 1px solid var(--accent-black);
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: var(--shadow-btn);
+            transition: background 0.15s ease, transform 0.15s ease;
+        }
+        .btn-submit-primary:hover:not(:disabled) {
+            background: var(--accent-black-hover);
+            transform: translateY(-1px);
+        }
+        .btn-submit-primary:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+        }
+
+        /* Mobile Switch Link */
+        .mobile-switch-link {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+        .mobile-switch-btn {
+            background: none;
+            border: none;
+            color: var(--text-heading);
+            font-weight: 700;
+            font-family: var(--font-sans);
+            cursor: pointer;
+            text-decoration: underline;
+            margin-left: 4px;
+        }
+
+        /* --------------------------------------------------------------------------
+           Sliding Overlay Container & Bridge Panels
+           -------------------------------------------------------------------------- */
+        .overlay-container {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 50%;
+            height: 100%;
+            overflow: hidden;
+            transition: transform var(--transition-duration) var(--transition-timing);
+            z-index: 100;
+        }
+
+        .auth-container.right-panel-active .overlay-container {
+            transform: translateX(-100%);
+        }
+
+        .overlay-bridge {
+            background: linear-gradient(145deg, #09090b 0%, #18181b 50%, #27272a 100%);
+            color: #ffffff;
+            position: relative;
+            left: -100%;
+            height: 100%;
+            width: 200%;
+            transform: translateX(0);
+            transition: transform var(--transition-duration) var(--transition-timing);
+        }
+
+        .auth-container.right-panel-active .overlay-bridge {
+            transform: translateX(50%);
+        }
+
+        .overlay-panel {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            padding: 0 48px;
+            text-align: center;
+            top: 0;
+            height: 100%;
+            width: 50%;
+            transform: translateX(0);
+            transition: transform var(--transition-duration) var(--transition-timing);
+        }
+
+        .overlay-left {
+            transform: translateX(-20%);
+        }
+        .auth-container.right-panel-active .overlay-left {
+            transform: translateX(0);
+        }
+
+        .overlay-right {
+            right: 0;
+            transform: translateX(0);
+        }
+        .auth-container.right-panel-active .overlay-right {
+            transform: translateX(20%);
+        }
+
+        .overlay-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 5px 12px;
+            border-radius: 9999px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            color: #ffffff;
+            margin-bottom: 20px;
+        }
+
+        .overlay-heading {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: #ffffff;
+            line-height: 1.25;
+            margin-bottom: 14px;
+        }
+
+        .overlay-text {
+            font-size: 14px;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 28px;
+            max-width: 320px;
+        }
+
+        /* Elegant Ghost Button on Overlay */
+        .btn-overlay-ghost {
+            background-color: transparent;
+            border: 1.5px solid rgba(255, 255, 255, 0.85);
+            color: #ffffff;
+            font-family: var(--font-sans);
+            font-size: 13.5px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            padding: 11px 30px;
+            border-radius: 9999px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-overlay-ghost:hover {
+            background-color: #ffffff;
+            color: #09090b;
+            border-color: #ffffff;
+            transform: scale(1.02);
+        }
+
+        /* --------------------------------------------------------------------------
+           Alert Notices (Error & Success Banner)
+           -------------------------------------------------------------------------- */
+        .status-alert {
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 12.5px;
+            line-height: 1.4;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-alert.error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+        }
+        .status-alert.success {
+            background: #ecfdf5;
+            border: 1px solid #a7f3d0;
+            color: #065f46;
+        }
+        .status-alert.info {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            color: #0369a1;
+        }
+
+        /* Demo Auto-fill Helper */
+        .demo-pill-box {
+            margin-top: 18px;
+            padding: 10px 12px;
+            background: #f4f4f5;
+            border: 1px dashed #d4d4d8;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 11.5px;
+            color: var(--text-muted);
+        }
+        .demo-pill-btn {
+            background: #ffffff;
+            border: 1px solid #d4d4d8;
+            color: #18181b;
+            font-size: 11px;
+            font-weight: 700;
+            font-family: var(--font-sans);
+            padding: 3px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .demo-pill-btn:hover {
+            background: #09090b;
+            color: #ffffff;
+            border-color: #09090b;
+        }
+
+        /* --------------------------------------------------------------------------
+           Forgot Password Modal Dialog
+           -------------------------------------------------------------------------- */
+        .modal-backdrop {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(9, 9, 11, 0.55);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-backdrop.open {
+            display: flex;
+        }
+
+        .modal-card {
+            background: #ffffff;
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 440px;
+            padding: 32px 28px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            position: relative;
+            animation: modalPop 0.22s var(--transition-timing);
+        }
+        @keyframes modalPop {
+            0% { transform: scale(0.95); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .modal-header {
+            margin-bottom: 18px;
+        }
+        .modal-header h3 {
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: var(--text-heading);
+            margin-bottom: 6px;
+        }
+        .modal-header p {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .btn-modal-cancel {
+            flex: 1;
+            padding: 10.5px 16px;
+            background: #f4f4f5;
+            color: var(--text-heading);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            font-family: var(--font-sans);
+            cursor: pointer;
+        }
+        .btn-modal-submit {
+            flex: 1.5;
+            padding: 10.5px 16px;
+            background: var(--accent-black);
+            color: #ffffff;
+            border: 1px solid var(--accent-black);
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            font-family: var(--font-sans);
+            cursor: pointer;
+            box-shadow: var(--shadow-btn);
+        }
+
+        /* --------------------------------------------------------------------------
+           Accessibility: Reduced Motion
+           -------------------------------------------------------------------------- */
+        @media (prefers-reduced-motion: reduce) {
+            .form-panel,
+            .overlay-container,
+            .overlay-bridge,
+            .overlay-panel,
+            .btn-submit-primary,
+            .btn-overlay-ghost {
+                transition: none !important;
+                animation: none !important;
+            }
+        }
+
+        /* --------------------------------------------------------------------------
+           Responsive Layout (Mobile & Tablet)
+           -------------------------------------------------------------------------- */
+        @media (max-width: 820px) {
+            body {
+                padding: 12px;
+                align-items: flex-start;
+            }
+            .auth-container {
+                flex-direction: column;
+                min-height: auto;
+                border-radius: 20px;
+            }
+            .overlay-container {
+                display: none !important;
+            }
+            .mobile-tabs-bar {
+                display: flex;
+            }
+            .mobile-switch-link {
+                display: block;
+            }
+            .form-panel {
+                position: relative;
+                width: 100%;
+                padding: 32px 24px;
+                transform: none !important;
+            }
+            .sign-in-panel {
+                display: flex;
+            }
+            .create-account-panel {
+                display: none;
+            }
+            .auth-container.right-panel-active .sign-in-panel {
+                display: none;
+            }
+            .auth-container.right-panel-active .create-account-panel {
+                display: flex;
+                opacity: 1;
+                pointer-events: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="auth-container {% if active_panel == 'register' %}right-panel-active{% endif %}" id="auth-container">
+        <!-- Mobile Switch Tabs Bar -->
+        <div class="mobile-tabs-bar">
+            <button type="button" class="mobile-tab-btn {% if active_panel != 'register' %}active{% endif %}" id="mobile-tab-signin" onclick="switchToSignIn()">
+                Sign In
+            </button>
+            <button type="button" class="mobile-tab-btn {% if active_panel == 'register' %}active{% endif %}" id="mobile-tab-register" onclick="switchToSignUp()">
+                Create Account
+            </button>
+        </div>
+
+        <!-- ====================================================================
+             1. Sign In Form Panel
+             ==================================================================== -->
+        <div class="form-panel sign-in-panel" id="panel-signin">
+            <div class="auth-form-content">
+                <div class="brand-badge">
+                    <span class="brand-badge-dot"></span>
+                    <span>Automated Fault Detection</span>
+                </div>
+
+                <h1 class="form-heading">Welcome Back</h1>
+                <p class="form-subtitle">Sign in to access your network monitoring dashboard and manage your devices.</p>
+
+                <!-- Status Banner / Flash Messages -->
+                <div id="signin-alert-container">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages and active_panel != 'register' %}
+                            {% for category, message in messages %}
+                                <div class="status-alert {{ category }}">
+                                    <span>{{ message }}</span>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                </div>
+
+                <form id="form-signin" method="POST" action="{{ url_for('login') }}" novalidate>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="next" value="{{ next }}">
+
+                    <!-- Email Field -->
+                    <div class="form-group">
+                        <label class="form-label" for="signin-email">Email Address</label>
+                        <div class="input-box">
+                            <input 
+                                type="email" 
+                                id="signin-email" 
+                                name="email" 
+                                class="form-input" 
+                                placeholder="name@company.com" 
+                                value="{{ email or '' }}" 
+                                required 
+                                autocomplete="email"
+                            >
+                        </div>
+                        <div class="field-error" id="err-signin-email">Please enter a valid email address.</div>
+                    </div>
+
+                    <!-- Password Field with Show/Hide Control -->
+                    <div class="form-group">
+                        <label class="form-label" for="signin-password">Password</label>
+                        <div class="input-box">
+                            <input 
+                                type="password" 
+                                id="signin-password" 
+                                name="password" 
+                                class="form-input has-toggle" 
+                                placeholder="••••••••" 
+                                required 
+                                autocomplete="current-password"
+                            >
+                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('signin-password', this)" aria-label="Toggle password visibility" title="Show or hide password">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="field-error" id="err-signin-password">Password is required.</div>
+                    </div>
+
+                    <!-- Remember Me & Forgot Password Row -->
+                    <div class="form-meta-row">
+                        <label class="remember-label" for="signin-remember">
+                            <input type="checkbox" id="signin-remember" name="remember_me" class="remember-checkbox" value="1">
+                            <span>Remember me</span>
+                        </label>
+                        <a href="javascript:void(0)" class="forgot-link" onclick="openForgotModal()">Forgot password?</a>
+                    </div>
+
+                    <!-- Sign In Action Button -->
+                    <button type="submit" class="btn-submit-primary" id="btn-signin-submit">
+                        <span id="btn-signin-text">Sign In</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                            <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
+                    </button>
+
+                    <!-- Mobile Switch Link -->
+                    <div class="mobile-switch-link">
+                        Don't have an account? 
+                        <button type="button" class="mobile-switch-btn" onclick="switchToSignUp()">Create Account</button>
+                    </div>
+
+                    <!-- Local Demo Quick Fill -->
+                    <div class="demo-pill-box">
+                        <span>Demo admin account:</span>
+                        <button type="button" class="demo-pill-btn" onclick="fillDemoCredentials()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="margin-right: 4px;">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                            </svg>Quick-Fill
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ====================================================================
+             2. Create Account Form Panel
+             ==================================================================== -->
+        <div class="form-panel create-account-panel" id="panel-register">
+            <div class="auth-form-content">
+                <div class="brand-badge">
+                    <span class="brand-badge-dot"></span>
+                    <span>New Account Registration</span>
+                </div>
+
+                <h2 class="form-heading">Create Your Account</h2>
+                <p class="form-subtitle">Get started with centralized network monitoring and fault detection.</p>
+
+                <!-- Status Banner for Register -->
+                <div id="register-alert-container">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages and active_panel == 'register' %}
+                            {% for category, message in messages %}
+                                <div class="status-alert {{ category }}">
+                                    <span>{{ message }}</span>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                </div>
+
+                <form id="form-register" method="POST" action="{{ url_for('register') }}" novalidate>
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <!-- Full Name -->
+                    <div class="form-group">
+                        <label class="form-label" for="register-fullname">Full Name</label>
+                        <div class="input-box">
+                            <input 
+                                type="text" 
+                                id="register-fullname" 
+                                name="full_name" 
+                                class="form-input" 
+                                placeholder="Alex Morgan" 
+                                value="{{ full_name or '' }}" 
+                                required 
+                                autocomplete="name"
+                            >
+                        </div>
+                        <div class="field-error" id="err-register-fullname">Full name is required.</div>
+                    </div>
+
+                    <!-- Email Address -->
+                    <div class="form-group">
+                        <label class="form-label" for="register-email">Email Address</label>
+                        <div class="input-box">
+                            <input 
+                                type="email" 
+                                id="register-email" 
+                                name="email" 
+                                class="form-input" 
+                                placeholder="alex@network.io" 
+                                value="{{ email or '' }}" 
+                                required 
+                                autocomplete="email"
+                            >
+                        </div>
+                        <div class="field-error" id="err-register-email">Please enter a valid work email.</div>
+                    </div>
+
+                    <!-- Password with Show/Hide -->
+                    <div class="form-group">
+                        <label class="form-label" for="register-password">Password</label>
+                        <div class="input-box">
+                            <input 
+                                type="password" 
+                                id="register-password" 
+                                name="password" 
+                                class="form-input has-toggle" 
+                                placeholder="Minimum 8 characters" 
+                                required 
+                                autocomplete="new-password"
+                            >
+                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('register-password', this)" aria-label="Toggle password visibility">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="field-error" id="err-register-password">Password must be at least 8 characters.</div>
+                    </div>
+
+                    <!-- Confirm Password with Show/Hide -->
+                    <div class="form-group">
+                        <label class="form-label" for="register-confirm">Confirm Password</label>
+                        <div class="input-box">
+                            <input 
+                                type="password" 
+                                id="register-confirm" 
+                                name="confirm_password" 
+                                class="form-input has-toggle" 
+                                placeholder="Re-enter password" 
+                                required 
+                                autocomplete="new-password"
+                            >
+                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('register-confirm', this)" aria-label="Toggle confirm password visibility">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="field-error" id="err-register-confirm">Passwords do not match.</div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" class="btn-submit-primary" id="btn-register-submit" style="margin-top: 8px;">
+                        <span id="btn-register-text">Create Account</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                            <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
+                    </button>
+
+                    <!-- Mobile Switch Link -->
+                    <div class="mobile-switch-link">
+                        Already have an account? 
+                        <button type="button" class="mobile-switch-btn" onclick="switchToSignIn()">Sign In</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ====================================================================
+             3. Sliding Welcome Overlay Bridge
+             ==================================================================== -->
+        <div class="overlay-container" id="overlay-container">
+            <div class="overlay-bridge">
+                <!-- Overlay Left (Visible when Create Account is active) -->
+                <div class="overlay-panel overlay-left">
+                    <span class="overlay-badge">NETFAULT NOC</span>
+                    <h2 class="overlay-heading">Welcome Back</h2>
+                    <p class="overlay-text">To stay connected with your network infrastructure, please sign in with your administrator credentials.</p>
+                    <button type="button" class="btn-overlay-ghost" id="signInSlideBtn" onclick="switchToSignIn()">Sign In</button>
+                </div>
+
+                <!-- Overlay Right (Visible when Sign In is active) -->
+                <div class="overlay-panel overlay-right">
+                    <span class="overlay-badge">SUPABASE PG ENGINE</span>
+                    <h2 class="overlay-heading">Centralized Fault Detection</h2>
+                    <p class="overlay-text">New here? Create an account to monitor device uptime, ICMP latency, and isolate routing bottlenecks in real time.</p>
+                    <button type="button" class="btn-overlay-ghost" id="signUpSlideBtn" onclick="switchToSignUp()">Create Account</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====================================================================
+         4. Forgot Password Modal Dialog
+         ==================================================================== -->
+    <div class="modal-backdrop" id="forgot-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="modal-title">Reset Your Password</h3>
+                <p>Enter your registered account email and we'll send a secure password recovery link via Supabase Auth.</p>
+            </div>
+
+            <div id="forgot-alert" class="status-alert info" style="display: none;"></div>
+
+            <form id="form-forgot" onsubmit="handleForgotPassword(event)">
+                <div class="form-group">
+                    <label class="form-label" for="forgot-email">Account Email</label>
+                    <input 
+                        type="email" 
+                        id="forgot-email" 
+                        class="form-input" 
+                        placeholder="admin@supabase.local" 
+                        required 
+                        autocomplete="email"
+                    >
+                    <div class="field-error" id="err-forgot-email">Please enter a valid email address.</div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn-modal-cancel" onclick="closeForgotModal()">Cancel</button>
+                    <button type="submit" class="btn-modal-submit" id="btn-forgot-submit">Send Reset Link</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- --------------------------------------------------------------------------
+         Client-Side State, Validation & Panel Animation Logic
+         -------------------------------------------------------------------------- -->
+    <script>
+        const container = document.getElementById('auth-container');
+        const csrfToken = "{{ csrf_token() }}";
+
+        // Panel Switch Actions
+        function switchToSignUp() {
+            container.classList.add('right-panel-active');
+            updateMobileTabs('register');
+            // Shift accessibility focus
+            const nameInput = document.getElementById('register-fullname');
+            if (nameInput) setTimeout(() => nameInput.focus(), 400);
+        }
+
+        function switchToSignIn() {
+            container.classList.remove('right-panel-active');
+            updateMobileTabs('signin');
+            // Shift accessibility focus
+            const emailInput = document.getElementById('signin-email');
+            if (emailInput) setTimeout(() => emailInput.focus(), 400);
+        }
+
+        function updateMobileTabs(panel) {
+            const tabIn = document.getElementById('mobile-tab-signin');
+            const tabUp = document.getElementById('mobile-tab-register');
+            if (tabIn && tabUp) {
+                if (panel === 'register') {
+                    tabIn.classList.remove('active');
+                    tabUp.classList.add('active');
+                } else {
+                    tabIn.classList.add('active');
+                    tabUp.classList.remove('active');
+                }
+            }
+        }
+
+        // Show/Hide Password Eye Toggle
+        function togglePasswordVisibility(fieldId, btnElement) {
+            const input = document.getElementById(fieldId);
+            if (!input) return;
+            const isPassword = input.type === 'password';
+            input.type = isPassword ? 'text' : 'password';
+
+            btnElement.innerHTML = isPassword ? `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path>
+                    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path>
+                    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path>
+                    <line x1="2" y1="2" x2="22" y2="22"></line>
+                </svg>
+            ` : `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            `;
+        }
+
+        // Quick-Fill Demo Credentials
+        function fillDemoCredentials() {
+            const emailInput = document.getElementById('signin-email');
+            const passInput = document.getElementById('signin-password');
+            if (emailInput && passInput) {
+                emailInput.value = 'admin@supabase.local';
+                passInput.value = 'admin123';
+                emailInput.focus();
+            }
+        }
+
+        // Live Password Match Validation for Registration
+        const regPass = document.getElementById('register-password');
+        const regConfirm = document.getElementById('register-confirm');
+        const errConfirm = document.getElementById('err-register-confirm');
+
+        function checkPasswordMatch() {
+            if (!regConfirm.value) {
+                errConfirm.classList.remove('visible');
+                return true;
+            }
+            if (regPass.value !== regConfirm.value) {
+                errConfirm.textContent = 'Passwords do not match.';
+                errConfirm.classList.add('visible');
+                return false;
+            } else {
+                errConfirm.classList.remove('visible');
+                return true;
+            }
+        }
+
+        if (regPass && regConfirm) {
+            regPass.addEventListener('input', checkPasswordMatch);
+            regConfirm.addEventListener('input', checkPasswordMatch);
+        }
+
+        // Email Format Regex Validator
+        function isValidEmail(email) {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        }
+
+        // ----------------------------------------------------------------------
+        // Sign In AJAX Form Submission
+        // ----------------------------------------------------------------------
+        const formSignIn = document.getElementById('form-signin');
+        formSignIn.addEventListener('submit', async function(e) {
+            const email = document.getElementById('signin-email').value.trim();
+            const password = document.getElementById('signin-password').value;
+            const rememberMe = document.getElementById('signin-remember').checked;
+            const errEmail = document.getElementById('err-signin-email');
+            const errPass = document.getElementById('err-signin-password');
+            const alertBox = document.getElementById('signin-alert-container');
+            const btnSubmit = document.getElementById('btn-signin-submit');
+            const btnText = document.getElementById('btn-signin-text');
+
+            let hasError = false;
+
+            if (!email || !isValidEmail(email)) {
+                errEmail.classList.add('visible');
+                hasError = true;
+            } else {
+                errEmail.classList.remove('visible');
+            }
+
+            if (!password) {
+                errPass.classList.add('visible');
+                hasError = true;
+            } else {
+                errPass.classList.remove('visible');
+            }
+
+            if (hasError) {
+                e.preventDefault();
+                return;
+            }
+
+            // Perform smooth AJAX submission with fallback to standard POST
+            e.preventDefault();
+            btnSubmit.disabled = true;
+            btnText.textContent = 'Signing in...';
+
+            try {
+                const response = await fetch("{{ url_for('login') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        password: password,
+                        remember_me: rememberMe,
+                        csrf_token: csrfToken
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    btnText.textContent = 'Redirecting...';
+                    window.location.href = data.redirect || "{{ url_for('dashboard') }}";
+                } else {
+                    alertBox.innerHTML = `
+                        <div class="status-alert error">
+                            <span>${data.error || 'Invalid credentials. Please verify your details.'}</span>
+                        </div>
+                    `;
+                    btnSubmit.disabled = false;
+                    btnText.textContent = 'Sign In';
+                }
+            } catch (err) {
+                // Network or parse issue: fallback to standard form submit
+                formSignIn.submit();
+            }
+        });
+
+        // ----------------------------------------------------------------------
+        // Create Account AJAX Form Submission
+        // ----------------------------------------------------------------------
+        const formRegister = document.getElementById('form-register');
+        formRegister.addEventListener('submit', async function(e) {
+            const fullName = document.getElementById('register-fullname').value.trim();
+            const email = document.getElementById('register-email').value.trim();
+            const password = document.getElementById('register-password').value;
+            const confirmPassword = document.getElementById('register-confirm').value;
+
+            const errName = document.getElementById('err-register-fullname');
+            const errEmail = document.getElementById('err-register-email');
+            const errPass = document.getElementById('err-register-password');
+            const errConfirm = document.getElementById('err-register-confirm');
+            const alertBox = document.getElementById('register-alert-container');
+            const btnSubmit = document.getElementById('btn-register-submit');
+            const btnText = document.getElementById('btn-register-text');
+
+            let hasError = false;
+
+            if (!fullName) {
+                errName.classList.add('visible');
+                hasError = true;
+            } else {
+                errName.classList.remove('visible');
+            }
+
+            if (!email || !isValidEmail(email)) {
+                errEmail.classList.add('visible');
+                hasError = true;
+            } else {
+                errEmail.classList.remove('visible');
+            }
+
+            if (!password || password.length < 8) {
+                errPass.classList.add('visible');
+                hasError = true;
+            } else {
+                errPass.classList.remove('visible');
+            }
+
+            if (password !== confirmPassword) {
+                errConfirm.classList.add('visible');
+                hasError = true;
+            } else {
+                errConfirm.classList.remove('visible');
+            }
+
+            if (hasError) {
+                e.preventDefault();
+                return;
+            }
+
+            e.preventDefault();
+            btnSubmit.disabled = true;
+            btnText.textContent = 'Creating account...';
+
+            try {
+                const response = await fetch("{{ url_for('register') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        full_name: fullName,
+                        email: email,
+                        password: password,
+                        confirm_password: confirmPassword,
+                        csrf_token: csrfToken
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    if (data.redirect) {
+                        btnText.textContent = 'Success! Entering console...';
+                        window.location.href = data.redirect;
+                    } else {
+                        alertBox.innerHTML = `
+                            <div class="status-alert success">
+                                <span>${data.message || 'Account created! Please sign in.'}</span>
+                            </div>
+                        `;
+                        btnSubmit.disabled = false;
+                        btnText.textContent = 'Create Account';
+                        setTimeout(() => switchToSignIn(), 1500);
+                    }
+                } else {
+                    alertBox.innerHTML = `
+                        <div class="status-alert error">
+                            <span>${data.error || 'Registration failed. Please check your information.'}</span>
+                        </div>
+                    `;
+                    btnSubmit.disabled = false;
+                    btnText.textContent = 'Create Account';
+                }
+            } catch (err) {
+                formRegister.submit();
+            }
+        });
+
+        // ----------------------------------------------------------------------
+        // Forgot Password Modal Handlers
+        // ----------------------------------------------------------------------
+        function openForgotModal() {
+            const modal = document.getElementById('forgot-modal');
+            const alertBox = document.getElementById('forgot-alert');
+            alertBox.style.display = 'none';
+            modal.classList.add('open');
+            const emailField = document.getElementById('forgot-email');
+            const signinEmail = document.getElementById('signin-email').value.trim();
+            if (signinEmail && emailField) {
+                emailField.value = signinEmail;
+            }
+            if (emailField) setTimeout(() => emailField.focus(), 150);
+        }
+
+        function closeForgotModal() {
+            document.getElementById('forgot-modal').classList.remove('open');
+        }
+
+        // Close on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeForgotModal();
+        });
+
+        async function handleForgotPassword(e) {
+            e.preventDefault();
+            const emailInput = document.getElementById('forgot-email');
+            const errEmail = document.getElementById('err-forgot-email');
+            const alertBox = document.getElementById('forgot-alert');
+            const submitBtn = document.getElementById('btn-forgot-submit');
+            const email = emailInput.value.trim();
+
+            if (!email || !isValidEmail(email)) {
+                errEmail.classList.add('visible');
+                return;
+            }
+            errEmail.classList.remove('visible');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending...';
+
+            try {
+                const res = await fetch("{{ url_for('forgot_password') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        csrf_token: csrfToken
+                    })
+                });
+                const data = await res.json();
+                alertBox.className = 'status-alert info';
+                alertBox.textContent = data.message || 'If an account exists with this email address, a password reset link has been sent.';
+                alertBox.style.display = 'flex';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Sent';
+                setTimeout(() => {
+                    closeForgotModal();
+                    submitBtn.textContent = 'Send Reset Link';
+                }, 3500);
+            } catch (err) {
+                alertBox.className = 'status-alert info';
+                alertBox.textContent = 'If an account exists with this email address, a password reset link has been sent.';
+                alertBox.style.display = 'flex';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Send Reset Link';
+            }
+        }
+    </script>
+</body>
+</html>

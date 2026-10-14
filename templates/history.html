@@ -36,9 +36,9 @@
 
             <select name="status" class="filter-input">
                 <option value="ALL" {% if selected_status == 'ALL' %}selected{% endif %}>All Operational States</option>
-                <option value="UP" {% if selected_status == 'UP' %}selected{% endif %}>● UP Only</option>
-                <option value="FAULT" {% if selected_status == 'FAULT' %}selected{% endif %}>▲ FAULT Only</option>
-                <option value="DOWN" {% if selected_status == 'DOWN' %}selected{% endif %}>✕ DOWN Only</option>
+                <option value="UP" {% if selected_status == 'UP' %}selected{% endif %}>UP Only</option>
+                <option value="FAULT" {% if selected_status == 'FAULT' %}selected{% endif %}>FAULT Only</option>
+                <option value="DOWN" {% if selected_status == 'DOWN' %}selected{% endif %}>DOWN Only</option>
             </select>
 
             <div style="display: flex; align-items: center; gap: 6px;">
@@ -136,11 +136,11 @@
                             </td>
                             <td>
                                 {% if h.overall_status == 'UP' %}
-                                    <span class="badge badge-up">● UP</span>
+                                    <span class="badge badge-up">UP</span>
                                 {% elif h.overall_status == 'FAULT' %}
-                                    <span class="badge badge-fault">▲ FAULT</span>
+                                    <span class="badge badge-fault">FAULT</span>
                                 {% elif h.overall_status == 'DOWN' %}
-                                    <span class="badge badge-down">✕ DOWN</span>
+                                    <span class="badge badge-down">DOWN</span>
                                 {% else %}
                                     <span class="badge badge-neutral">{{ h.overall_status }}</span>
                                 {% endif %}

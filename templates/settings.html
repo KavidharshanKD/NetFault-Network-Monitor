@@ -133,4 +133,216 @@
         </div>
     </form>
 </div>
+
+<!-- Email Alert & Notification Settings Card -->
+<div class="form-card" style="margin-top: 24px;">
+    <div class="card-header">
+        <div>
+            <span class="card-title">Immediate Email Alerts & Dispatch Configuration</span>
+            <div class="text-muted" style="font-size: 12px; margin-top: 2px;">
+                Instant dispatch upon initial fault detection without delay, plus recovery notifications
+            </div>
+        </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('settings_view') }}" id="email-settings-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <!-- Preserve existing monitoring settings -->
+        <input type="hidden" name="monitor_interval" value="{{ settings.monitor_interval }}">
+        <input type="hidden" name="ping_timeout" value="{{ settings.ping_timeout }}">
+        <input type="hidden" name="ping_count" value="{{ settings.ping_count }}">
+        <input type="hidden" name="tcp_timeout" value="{{ settings.tcp_timeout }}">
+        <input type="hidden" name="concurrency_limit" value="{{ settings.concurrency_limit }}">
+        <input type="hidden" name="auto_monitoring" value="{{ settings.auto_monitoring }}">
+
+        <!-- Master Notification Toggle -->
+        <div class="form-group">
+            <label class="form-check" for="email_notifications_enabled">
+                <input 
+                    type="checkbox" 
+                    id="email_notifications_enabled" 
+                    name="email_notifications_enabled" 
+                    value="1" 
+                    {% if settings.email_notifications_enabled == 1 %}checked{% endif %}
+                >
+                <strong style="font-size: 14px; color: var(--text-heading);">Enable Immediate Email Notifications</strong>
+            </label>
+            <div class="form-hint" style="margin-left: 24px;">
+                When active, NetFault immediately dispatches email alerts during the same cycle a fault or recovery is detected.
+            </div>
+        </div>
+
+        <!-- Recipient Email -->
+        <div class="form-group">
+            <label class="form-label" for="alert_recipient_email">
+                Alert Recipient Email Address(es)
+            </label>
+            <input 
+                type="text" 
+                id="alert_recipient_email" 
+                name="alert_recipient_email" 
+                class="form-input" 
+                placeholder="admin@company.com, noc-team@company.com" 
+                value="{{ settings.alert_recipient_email or '' }}"
+            >
+            <div class="form-hint">
+                Separate multiple recipient addresses with commas. All listed engineers will receive immediate alerts.
+            </div>
+        </div>
+
+        <!-- Trigger Conditions Grid -->
+        <div style="margin: 20px 0; padding: 16px; background: var(--surface-subtle); border-radius: 8px; border: 1px solid var(--border-subtle);">
+            <div style="font-size: 13px; font-weight: 700; color: var(--text-heading); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;">
+                Alert Trigger Conditions
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px;">
+                <label class="form-check" for="alert_on_down">
+                    <input type="checkbox" id="alert_on_down" name="alert_on_down" value="1" {% if settings.alert_on_down == 1 %}checked{% endif %}>
+                    <span>Device DOWN (Unreachable)</span>
+                </label>
+                <label class="form-check" for="alert_on_fault">
+                    <input type="checkbox" id="alert_on_fault" name="alert_on_fault" value="1" {% if settings.alert_on_fault == 1 %}checked{% endif %}>
+                    <span>Service FAULT (Port Refused/Timeout)</span>
+                </label>
+                <label class="form-check" for="alert_on_latency">
+                    <input type="checkbox" id="alert_on_latency" name="alert_on_latency" value="1" {% if settings.alert_on_latency == 1 %}checked{% endif %}>
+                    <span>Sustained Latency Degradation</span>
+                </label>
+                <label class="form-check" for="alert_on_recovery">
+                    <input type="checkbox" id="alert_on_recovery" name="alert_on_recovery" value="1" {% if settings.alert_on_recovery == 1 %}checked{% endif %}>
+                    <span>Device Recovery (Restored UP)</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Thresholds -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+                <label class="form-label" for="latency_threshold_ms">
+                    Latency Degradation Threshold (ms)
+                </label>
+                <input 
+                    type="number" 
+                    id="latency_threshold_ms" 
+                    name="latency_threshold_ms" 
+                    class="form-input mono" 
+                    min="10" 
+                    max="10000" 
+                    value="{{ settings.latency_threshold_ms or 200 }}"
+                >
+                <div class="form-hint">Alert triggers when round-trip response time exceeds this value. Default: 200ms.</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="packet_loss_threshold_pct">
+                    Packet Loss Threshold (%)
+                </label>
+                <input 
+                    type="number" 
+                    id="packet_loss_threshold_pct" 
+                    name="packet_loss_threshold_pct" 
+                    class="form-input mono" 
+                    min="1" 
+                    max="100" 
+                    value="{{ settings.packet_loss_threshold_pct or 50 }}"
+                >
+                <div class="form-hint">Alert triggers when measured packet drop percentage exceeds this limit. Default: 50%.</div>
+            </div>
+        </div>
+
+        <!-- Backend .env Configuration Notice -->
+        <div style="margin: 20px 0 16px 0; padding: 14px 16px; background: var(--surface-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-size: 12.5px; color: var(--text-secondary); display: flex; align-items: flex-start; gap: 12px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink: 0; color: var(--brand-accent); margin-top: 1px;">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                <line x1="6" y1="18" x2="6.01" y2="18"></line>
+            </svg>
+            <div>
+                <strong style="color: var(--text-heading); display: block; margin-bottom: 2px;">Secure Outbound SMTP Infrastructure</strong>
+                SMTP server host, port, authentication credentials, and TLS security are loaded directly from the backend <code>.env</code> file to ensure credentials are never exposed to browser sessions. Use the Alert Recipient Email field above to specify who receives the notifications.
+            </div>
+        </div>
+
+        <div class="form-actions" style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px;">
+            <button type="submit" class="btn btn-primary">
+                Save Notification Preferences
+            </button>
+            <button type="button" class="btn btn-outline" id="btn-test-email" onclick="triggerTestEmail()" style="display: inline-flex; align-items: center; gap: 8px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+                <span id="test-email-btn-text">Send Test Email</span>
+            </button>
+        </div>
+
+        <!-- Interactive Test Email Result Toast/Banner -->
+        <div id="test-email-feedback" style="display: none; margin-top: 16px; padding: 14px; border-radius: 8px; font-size: 13px;"></div>
+    </form>
+</div>
+
+<script>
+async function triggerTestEmail() {
+    const feedback = document.getElementById('test-email-feedback');
+    const btn = document.getElementById('btn-test-email');
+    const btnText = document.getElementById('test-email-btn-text');
+    
+    const recipient = document.getElementById('alert_recipient_email').value.trim();
+    if (!recipient) {
+        feedback.style.display = 'block';
+        feedback.style.background = '#fef2f2';
+        feedback.style.color = '#991b1b';
+        feedback.style.border = '1px solid #fecaca';
+        feedback.innerHTML = '<strong>Recipient Required:</strong> Please enter an Alert Recipient Email Address above before sending a test.';
+        return;
+    }
+
+    const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+
+    btn.disabled = true;
+    btnText.textContent = 'Dispatching test...';
+    feedback.style.display = 'block';
+    feedback.style.background = '#f0f9ff';
+    feedback.style.color = '#0369a1';
+    feedback.style.border = '1px solid #bae6fd';
+    feedback.innerHTML = 'Connecting to backend SMTP provider configured in .env and sending test probe...';
+
+    try {
+        const resp = await fetch("{{ url_for('api_test_email') }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                recipient_email: recipient.split(',')[0].trim(),
+                csrf_token: csrfToken
+            })
+        });
+
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+            feedback.style.background = '#f0fdf4';
+            feedback.style.color = '#166534';
+            feedback.style.border = '1px solid #bbf7d0';
+            feedback.innerHTML = `<strong>Success:</strong> ${data.message}`;
+        } else {
+            feedback.style.background = '#fef2f2';
+            feedback.style.color = '#991b1b';
+            feedback.style.border = '1px solid #fecaca';
+            feedback.innerHTML = `<strong>Delivery Notice:</strong> ${data.error || data.message || 'Could not send test email. Check your .env SMTP credentials.'}`;
+        }
+    } catch (err) {
+        feedback.style.background = '#fef2f2';
+        feedback.style.color = '#991b1b';
+        feedback.style.border = '1px solid #fecaca';
+        feedback.innerHTML = `<strong>Connection Error:</strong> ${err.message || 'Network error communicating with local server.'}`;
+    } finally {
+        btn.disabled = false;
+        btnText.textContent = 'Send Test Email';
+    }
+}
+</script>
 {% endblock %}
+
